@@ -41,6 +41,7 @@ import sys
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import scoring  # noqa: E402
 import validate  # noqa: E402
 
 HARNESS = "airate-run 1"
@@ -176,7 +177,7 @@ def run_trial(args: argparse.Namespace, task: dict, task_dir: pathlib.Path, arm:
     }
     (trial_dir / "trial.json").write_text(json.dumps(trial | {"model": metrics.get("model"), "setup_rc": setup_rc, "check_rc": check_rc}, indent=2) + "\n")
     print(f"  {arm} #{index}: {'PASS' if trial['success'] else 'FAIL'}"
-          + ("" if grader_intact else " (grader modified)") + ("" if arm_ok else " (arm condition not met)") + f" in {trial['duration_ms']} ms"
+          + ("" if grader_intact else " (grader modified)") + ("" if arm_ok else " (void: arm condition not met)") + f" in {trial['duration_ms']} ms"
           + (f", ${trial['cost_usd']:.4f}" if trial["cost_usd"] is not None else "")
           + (f", {trial['turns']} turns" if trial["turns"] is not None else ""), flush=True)
     return trial, metrics.get("model")
@@ -255,9 +256,10 @@ def main(argv: list[str]) -> int:
             model = model or seen_model
         arms[arm] = {"trials": trials}
     report = build_report(args, task, task_dir, arms, model, out)
-    if not any(t["success"] for arm in arms.values() for t in arm["trials"]):
-        print("inconclusive: no trial in either arm passed the check. The report is valid and may be filed, but it "
-              "compares nothing and adds no uplift evidence; check the agent command and the task before filing.")
+    if scoring.is_inconclusive(report["bench"]):
+        print("inconclusive: an arm has no attempted trial, or no trial in either arm passed the check. The report is "
+              "valid and may be filed, but it compares nothing and adds no uplift evidence; check the agent command, "
+              "the prompts and the task before filing.")
     errors = validate.validate_report(report)
     report_path = out / "report.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

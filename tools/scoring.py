@@ -45,12 +45,21 @@ def pick_unit(with_trials: list[dict], base_trials: list[dict]) -> str:
     return "duration_ms"
 
 
+def is_void(trial: dict) -> bool:
+    """A trial whose arm condition was not met never measured the arm: the agent ignored the subject in the
+    with arm, or pulled in a third-party package in the baseline. It counts for nothing, not as a failure."""
+    return trial.get("arm_ok") is False
+
+
 def arm_summary(trials: list[dict], unit: str) -> dict:
-    """Solve rate and cost per solved task for one arm: everything spent on the arm, failed trials included,
-    divided by the number of solved trials. The budget question, not the typical trial."""
-    solved = sum(1 for t in trials if t["success"])
-    total = float(sum(_trial_value(t, unit) for t in trials))
-    return {"trials": len(trials), "solved": solved, "solve_rate": solved / len(trials), "total_cost": total,
+    """Solve rate and cost per solved task for one arm over its attempted (non-void) trials: everything spent
+    on them, failed trials included, divided by the number of solved trials. The budget question, not the
+    typical trial."""
+    attempted = [t for t in trials if not is_void(t)]
+    solved = sum(1 for t in attempted if t["success"])
+    total = float(sum(_trial_value(t, unit) for t in attempted))
+    return {"trials": len(trials), "void": len(trials) - len(attempted), "attempted": len(attempted), "solved": solved,
+            "solve_rate": solved / len(attempted) if attempted else 0.0, "total_cost": total,
             "unit": unit, "cost_per_solve": total / solved if solved else math.inf}
 
 
@@ -75,7 +84,7 @@ def bench_uplift(bench: dict) -> dict:
     w = arm_summary(with_trials, unit)
     b = arm_summary(base_trials, unit)
     cw, cb = w["cost_per_solve"], b["cost_per_solve"]
-    conclusive = w["solved"] > 0 or b["solved"] > 0
+    conclusive = w["attempted"] > 0 and b["attempted"] > 0 and (w["solved"] > 0 or b["solved"] > 0)
     if not conclusive:
         ratio = 1.0
     elif math.isinf(cw):
@@ -88,7 +97,11 @@ def bench_uplift(bench: dict) -> dict:
 
 
 def is_inconclusive(bench: dict) -> bool:
-    return not any(t["success"] for arm in bench["arms"].values() for t in arm["trials"])
+    """No comparison is possible: an arm has no attempted trial, or nothing was solved anywhere."""
+    arms = bench["arms"].values()
+    if any(all(is_void(t) for t in arm["trials"]) for arm in arms):
+        return True
+    return not any(t["success"] for arm in arms for t in arm["trials"])
 
 
 def proportion_component(num: float, den: float) -> dict | None:
