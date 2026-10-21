@@ -102,6 +102,11 @@ def weigh(report: dict, ctx: dict, root: pathlib.Path) -> tuple[float, list[str]
         if not task_dir.exists() or task_sha256(task_dir) != report["bench"]["task"]["sha256"]:
             flags.append("task_mismatch")
             weight = 0.0
+        else:
+            declared = [sub.lower() for sub in json.loads((task_dir / "task.json").read_text()).get("subjects", [])]
+            if declared and report["subject"]["repo"].lower() not in declared:
+                flags.append("subject_mismatch")
+                weight = 0.0
     return weight, flags
 
 

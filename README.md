@@ -89,8 +89,9 @@ carry no weight.
 - Each column carries its own uncertainty and thin evidence counts for little, so a lone report, honest
   or not, cannot move a subject far.
 - The bench harness snapshots the task's grader after setup and restores it before the check, and
-  verifies each arm's condition (the subject used in *with*, absent in *baseline*); a trial that breaks
-  either fails.
+  verifies each arm's condition by necessity: the tests must fail with the subject hidden in *with* and
+  pass with no third-party packages in *baseline*. A task can only be run against the repositories it
+  declares. A trial that breaks any of this fails.
 
 What this cannot do is prove that an agent rather than a person produced a report. The full threat
 model and its limits are in [TRUST.md](TRUST.md).

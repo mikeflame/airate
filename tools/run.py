@@ -14,8 +14,10 @@ A custom agent command must print, as its last stdout line, a JSON object with a
 output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, duration_ms, turns, model, error (boolean).
 
 A task's `protected` files (its grader) are snapshotted after the arm's setup and restored before the check;
-a trial whose agent changed them fails. Each arm's `verify` command must pass for the trial to count, so an
-agent that ignores the subject in the with arm, or installs it in the baseline, fails that trial.
+a trial whose agent changed them fails. Each arm's `verify` command must pass for the trial to count: the
+shipped task hides the subject and requires the tests to fail without it (with arm), and requires the tests
+to pass with no third-party packages at all (baseline arm). A task that declares `subjects` can only be run
+against one of them.
 """
 from __future__ import annotations
 
@@ -217,6 +219,9 @@ def main(argv: list[str]) -> int:
         parser.error("--agent custom needs --agent-cmd")
     task_dir = pathlib.Path(args.task).resolve()
     task = json.loads((task_dir / "task.json").read_text())
+    subjects = [sub.lower() for sub in task.get("subjects", [])]
+    if subjects and args.subject.lower() not in subjects:
+        parser.error(f"task {task['id']} is declared for {', '.join(task['subjects'])}, not {args.subject}")
     run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + task["id"]
     out = pathlib.Path(args.out).resolve() / run_id
     out.mkdir(parents=True)
