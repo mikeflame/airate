@@ -1,0 +1,113 @@
+{
+  "agent": {
+    "model": "claude-haiku-4-5-20251001",
+    "name": "claude-code",
+    "version": "2.1.235"
+  },
+  "attestation": "I ran the AI Rate protocol v1 as written. Every value in this report was measured or observed by me, the agent; no value was dictated, edited or selected by a human.",
+  "bench": {
+    "arms": {
+      "baseline": {
+        "trials": [
+          {
+            "agent_error": false,
+            "cache_read_tokens": 137079,
+            "cache_write_tokens": 25063,
+            "cost_usd": 0.0910979,
+            "duration_ms": 44144,
+            "input_tokens": 34,
+            "output_tokens": 5446,
+            "success": true,
+            "turns": 4
+          },
+          {
+            "agent_error": false,
+            "cache_read_tokens": 137385,
+            "cache_write_tokens": 24598,
+            "cost_usd": 0.0872935,
+            "duration_ms": 39009,
+            "input_tokens": 34,
+            "output_tokens": 4865,
+            "success": true,
+            "turns": 4
+          },
+          {
+            "agent_error": false,
+            "cache_read_tokens": 139112,
+            "cache_write_tokens": 26365,
+            "cost_usd": 0.0998152,
+            "duration_ms": 53053,
+            "input_tokens": 34,
+            "output_tokens": 6628,
+            "success": true,
+            "turns": 4
+          }
+        ]
+      },
+      "with": {
+        "trials": [
+          {
+            "agent_error": false,
+            "cache_read_tokens": 460361,
+            "cache_write_tokens": 52083,
+            "cost_usd": 0.19304710000000003,
+            "duration_ms": 77942,
+            "input_tokens": 90,
+            "output_tokens": 8551,
+            "success": true,
+            "turns": 11
+          },
+          {
+            "agent_error": false,
+            "cache_read_tokens": 388914,
+            "cache_write_tokens": 33181,
+            "cost_usd": 0.14425239999999998,
+            "duration_ms": 69701,
+            "input_tokens": 74,
+            "output_tokens": 7785,
+            "success": true,
+            "turns": 9
+          },
+          {
+            "agent_error": false,
+            "cache_read_tokens": 628370,
+            "cache_write_tokens": 35975,
+            "cost_usd": 0.16745600000000002,
+            "duration_ms": 63887,
+            "input_tokens": 114,
+            "output_tokens": 6511,
+            "success": true,
+            "turns": 14
+          }
+        ]
+      }
+    },
+    "bundle_sha256": "f801159aba6bf4f48466b2c10e8ab8b79e544563ce5e7365767c269bf7be12cf",
+    "harness": "airate-run 1",
+    "task": {
+      "id": "js-date-parse",
+      "sha256": "7b7faddfff32cdbe7bd04076f934ac30db51bba34a2e1a448cbfbc6d683fa20a",
+      "source": "airate"
+    }
+  },
+  "created_at": "2026-10-21T07:29:39Z",
+  "environment": {
+    "os": "linux",
+    "runtime": "python 3.10.12"
+  },
+  "intake": {
+    "accepted_at": "2026-10-21T07:32:31Z",
+    "flags": [],
+    "issue": 5,
+    "submitter": "mikeflame",
+    "submitter_created_at": "2019-07-30T17:48:15Z",
+    "weight": 1.0
+  },
+  "kind": "bench",
+  "protocol": 1,
+  "subject": {
+    "package": "npm:dayjs",
+    "repo": "iamkun/dayjs",
+    "type": "library"
+  }
+}

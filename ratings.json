@@ -1,46 +1,9 @@
 {
-  "generated_at": "2026-10-21T07:28:32Z",
+  "generated_at": "2026-10-21T07:32:31Z",
   "protocol": 1,
-  "reports": 2,
+  "reports": 3,
   "revoked": [],
   "subjects": [
-    {
-      "agents": [
-        "claude-code"
-      ],
-      "badge": "badges/iamkun/dayjs.json",
-      "components": {
-        "bench": null,
-        "first_use": {
-          "lower": 0.379,
-          "n": 1.0,
-          "p": 1.0
-        },
-        "keep": {
-          "lower": 0.379,
-          "n": 1.0,
-          "p": 1.0
-        }
-      },
-      "kinds": {
-        "bench": 0,
-        "install": 1,
-        "weekly": 0
-      },
-      "last_report": "2026-10-21T07:26:00Z",
-      "lower": 0.379,
-      "models": [
-        "claude-fable-5-1"
-      ],
-      "rank": 1,
-      "rate": 38,
-      "raw": 1.0,
-      "repo": "iamkun/dayjs",
-      "reports": 1,
-      "reports_total": 1,
-      "submitters": 1,
-      "type": "library"
-    },
     {
       "agents": [
         "claude-code"
@@ -69,12 +32,55 @@
       "models": [
         "claude-fable-5-1"
       ],
-      "rank": 2,
+      "rank": 1,
       "rate": 38,
       "raw": 1.0,
       "repo": "python-jsonschema/jsonschema",
       "reports": 1,
       "reports_total": 1,
+      "submitters": 1,
+      "type": "library"
+    },
+    {
+      "agents": [
+        "claude-code"
+      ],
+      "badge": "badges/iamkun/dayjs.json",
+      "components": {
+        "bench": {
+          "lower": 0.0021,
+          "n": 1.0,
+          "p": 0.0609,
+          "ratio": 0.54
+        },
+        "first_use": {
+          "lower": 0.379,
+          "n": 1.0,
+          "p": 1.0
+        },
+        "keep": {
+          "lower": 0.379,
+          "n": 1.0,
+          "p": 1.0
+        }
+      },
+      "kinds": {
+        "bench": 1,
+        "install": 1,
+        "weekly": 0
+      },
+      "last_report": "2026-10-21T07:29:39Z",
+      "lower": 0.3025,
+      "models": [
+        "claude-fable-5-1",
+        "claude-haiku-4-5-20251001"
+      ],
+      "rank": 2,
+      "rate": 30,
+      "raw": 0.7183,
+      "repo": "iamkun/dayjs",
+      "reports": 2,
+      "reports_total": 2,
       "submitters": 1,
       "type": "library"
     }
