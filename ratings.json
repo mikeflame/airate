@@ -25,6 +25,7 @@
       },
       "kinds": {
         "bench": 0,
+        "bench_inconclusive": 0,
         "install": 1,
         "weekly": 0
       },
@@ -49,10 +50,10 @@
       "badge": "badges/iamkun/dayjs.json",
       "components": {
         "bench": {
-          "lower": 0.0073,
+          "lower": 0.01,
           "n": 1.33,
-          "p": 0.102,
-          "ratio": 0.61
+          "p": 0.1204,
+          "ratio": 0.64
         },
         "first_try": {
           "lower": 0.0,
@@ -68,18 +69,19 @@
       },
       "kinds": {
         "bench": 2,
+        "bench_inconclusive": 0,
         "install": 1,
         "weekly": 0
       },
       "last_report": "2026-10-21T07:59:01Z",
-      "lower": 0.0326,
+      "lower": 0.0329,
       "models": [
         "claude-fable-5-1",
         "claude-haiku-4-5-20251001"
       ],
       "rank": 2,
       "rate": 3,
-      "raw": 0.0969,
+      "raw": 0.0994,
       "repo": "iamkun/dayjs",
       "reports": 3,
       "reports_total": 3,
