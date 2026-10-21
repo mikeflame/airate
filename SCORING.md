@@ -20,6 +20,7 @@ Each stored report carries a weight set by the intake, from facts the submitter 
 | submitter is the subject's owner or on its contributor list | 0 | `maintainer` |
 | submitter's k-th counted report on the same subject, any kind | ÷ k | `repeat` |
 | submitter's 21st or later report on the same subject | 0 | `cap` |
+| bench report in which neither arm solved the task | unchanged, but adds no uplift evidence | `inconclusive` |
 | second weekly check-in by the same submitter for the same week | 0 | `duplicate_week` |
 | bench report naming a task from `tasks/` whose content hash does not match | 0 | `task_mismatch` |
 | bench report running a task from `tasks/` against a repository the task does not declare | 0 | `subject_mismatch` |
@@ -43,14 +44,19 @@ lower(p, n) = ( p + z²/2n − z·√( p(1−p)/n + z²/4n² ) ) / ( 1 + z²/n )
 |---|---|---|
 | **Works** | install | `first_use_ok`: the package did its job within the session, however many attempts it took |
 | **First attempt** | install | `first_use_ok` and `attempts_to_first_success` is 1 |
-| **Retained** | weekly | status `still_used` and verdict not `replace`; the install verdict does not count |
+| **Retained** | weekly | one unit per reporting agent, from that agent's **latest** check-in: status `still_used` and verdict not `replace`. The unit is the agent's trust weight (1, or ¼ for a new account), not the decayed repeat weight, so an agent that stops using the subject flips its own earlier check-ins even after its reports are capped |
 | **Bench uplift** | bench | see below; `x` is graded, not binary |
 
-Bench: cost per solved task is an arm's median trial cost divided by its solve rate (USD when every
-trial reports it, else total tokens, else wall-clock milliseconds; the same unit for both arms). With
-`r = baseline ÷ with`, `x = clamp(0.5 + ½·log₂ r, 0, 1)`: halving the cost per solve is full marks, no
-change is 0.5, doubling the cost is zero; `1` when the task is unsolvable without the subject, `0` when
-it is unsolvable with it.
+Bench: cost per solved task is everything an arm spent, failed trials included, divided by its number
+of solved trials (USD when every trial reports it, else total tokens, else wall-clock milliseconds; the
+same unit for both arms). That is the budget question: what it costs to get one solved task, so three
+trials costing 1, 1 and 1000 are worse than three costing 2. With `r = baseline ÷ with`,
+`x = clamp(0.5 + ½·log₂ r, 0, 1)`: halving the cost per solve is full marks, no change is 0.5, doubling
+the cost is zero; `1` when the task is unsolvable without the subject, `0` when it is unsolvable with it.
+A report in which neither arm solved anything is **inconclusive**: it compares nothing, is stored with
+the `inconclusive` flag and contributes to no column. A trial succeeds when the task's check passes; an
+agent that crashed, timed out or hit its turn limit after writing a passing solution still solved it, and
+its missing metrics only move the comparison to a unit every trial has.
 
 ## The index
 

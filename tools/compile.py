@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import pathlib
 import statistics
 import sys
@@ -48,32 +49,52 @@ def badge_for(rate: int | None) -> dict:
 
 
 def score_subject(reports: list[dict]) -> dict:
-    """Aggregate every counted report of one subject into components and the index. See SCORING.md."""
+    """Aggregate every stored (non-revoked) report of one subject into columns and the index. See SCORING.md.
+
+    Works, first attempt and bench use counted reports (weight > 0). Retained uses each agent's latest weekly
+    check-in at its trust weight, so an agent that stops using the subject flips its own earlier check-ins
+    even after its reports are capped or decayed. Inconclusive bench reports (no solve in either arm) add
+    no uplift evidence.
+    """
     sums = {k: [0.0, 0.0] for k in ("works", "first_try", "retained", "bench")}
     ratios: list[float] = []
+    inconclusive = 0
 
     def add(name: str, w: float, x: float) -> None:
         sums[name][0] += w * x
         sums[name][1] += w
 
+    latest_weekly: dict[str, dict] = {}
     for r in reports:
         w = r["_weight"]
-        if r["kind"] == "install":
+        if r["kind"] == "install" and w > 0:
             inst = r["install"]
             add("works", w, inst["first_use_ok"])
             add("first_try", w, inst["first_use_ok"] and inst.get("attempts_to_first_success") == 1)
         elif r["kind"] == "weekly":
-            wk = r["weekly"]
-            add("retained", w, wk["status"] == "still_used" and wk["verdict"] != "replace")
-        elif r["kind"] == "bench":
+            flags = set(r["intake"]["flags"])
+            if flags & {"maintainer", "duplicate_week"}:
+                continue
+            key = r["intake"]["submitter"].lower()
+            stamp = (r["created_at"], r["intake"]["issue"])
+            if key not in latest_weekly or stamp > (latest_weekly[key]["created_at"], latest_weekly[key]["intake"]["issue"]):
+                latest_weekly[key] = r
+        elif r["kind"] == "bench" and w > 0:
+            if scoring.is_inconclusive(r["bench"]):
+                inconclusive += 1
+                continue
             up = scoring.bench_uplift(r["bench"])
             add("bench", w, up["u"])
             ratios.append(up["ratio"])
+    for r in latest_weekly.values():
+        wk = r["weekly"]
+        add("retained", scoring.trust_weight(r["intake"]), wk["status"] == "still_used" and wk["verdict"] != "replace")
     components = {name: scoring.proportion_component(num, den) for name, (num, den) in sums.items()}
     if components["bench"] is not None:
         components["bench"]["ratio"] = statistics.median(ratios)
     idx = scoring.index(components)
-    return {"components": components, "raw": idx["raw"], "lower": idx["lower"], "rate": round(100 * idx["lower"])}
+    return {"components": components, "raw": idx["raw"], "lower": idx["lower"], "rate": round(100 * idx["lower"]),
+            "bench_inconclusive": inconclusive}
 
 
 def compile_ratings(root: pathlib.Path) -> dict:
@@ -94,23 +115,23 @@ def compile_ratings(root: pathlib.Path) -> dict:
     subjects = []
     for key, items in by_subject.items():
         counted = [r for r in items if r["_weight"] > 0]
-        if not counted:
+        scored = score_subject(items)
+        if all(c is None for c in scored["components"].values()):
             continue
-        scored = score_subject(counted)
-        latest = max(r["created_at"] for r in counted)
+        latest = max(r["created_at"] for r in (counted or items))
         subjects.append({
-            "repo": counted[-1]["subject"]["repo"],
-            "type": counted[-1]["subject"]["type"],
+            "repo": items[-1]["subject"]["repo"],
+            "type": items[-1]["subject"]["type"],
             "rate": scored["rate"],
             "raw": round(scored["raw"], 4),
             "lower": round(scored["lower"], 4),
             "components": _round_components(scored["components"]),
             "reports": len(counted),
             "reports_total": len(items),
-            "submitters": len({r["intake"]["submitter"] for r in counted}),
-            "agents": sorted({r["agent"]["name"] for r in counted}),
-            "models": sorted({r["agent"]["model"] for r in counted}),
-            "kinds": {k: sum(1 for r in counted if r["kind"] == k) for k in ("install", "weekly", "bench")},
+            "submitters": len({r["intake"]["submitter"] for r in (counted or items)}),
+            "agents": sorted({r["agent"]["name"] for r in (counted or items)}),
+            "models": sorted({r["agent"]["model"] for r in (counted or items)}),
+            "kinds": {k: sum(1 for r in counted if r["kind"] == k) for k in ("install", "weekly", "bench")} | {"bench_inconclusive": scored["bench_inconclusive"]},
             "last_report": latest,
             "badge": f"badges/{key}.json",
         })
@@ -175,7 +196,7 @@ def render_ratings_md(ratings: dict) -> str:
         "",
         f"Compiled from {ratings['reports']} reports, the last accepted {ratings['generated_at'] or 'never'}. Generated file: do not edit; see [SCORING.md](SCORING.md) for the formula and [PROTOCOL.md](PROTOCOL.md) to add a report.",
         "",
-        "**AI Rate** is an evidence-weighted index (0–100), not a probability: each column's Wilson lower bound, scaled by its weight and by how much evidence it has; missing evidence counts as zero. Columns are weighted point estimates with the effective number of reports in brackets. *Works* is first-use success within the session, *First attempt* success on the first try, *Retained* comes only from weekly check-ins, *Bench uplift* is cost per solved task without the repository divided by cost with it.",
+        "**AI Rate** is an evidence-weighted index (0–100), not a probability: each column's Wilson lower bound, scaled by its weight and by how much evidence it has; missing evidence counts as zero. Columns are weighted point estimates with the effective number of reports in brackets. *Works* is first-use success within the session, *First attempt* success on the first try, *Retained* is the share of reporting agents whose latest weekly check-in still uses the repository, *Bench uplift* is total spend per solved task without the repository divided by the same with it; benchmarks in which neither arm solved the task are inconclusive and add nothing.",
         "",
     ]
     if ratings["subjects"]:
@@ -217,6 +238,14 @@ def generated_files(root: pathlib.Path, ratings: dict) -> dict[pathlib.Path, str
     return files
 
 
+def record_written(root: pathlib.Path, paths: list[pathlib.Path]) -> None:
+    """Tell tools/store.sh which files this run wrote, so it can refuse a commit that lacks any of them."""
+    manifest = os.environ.get("STORE_MANIFEST")
+    if manifest and paths:
+        with open(manifest, "a") as fh:
+            fh.writelines(p.relative_to(root).as_posix() + "\n" for p in paths)
+
+
 def write_all(root: pathlib.Path, ratings: dict) -> list[pathlib.Path]:
     changed = []
     for path, content in generated_files(root, ratings).items():
@@ -243,6 +272,7 @@ def main(argv: list[str]) -> int:
         print("generated files are up to date")
         return 0
     changed = write_all(root, ratings)
+    record_written(root, changed)
     print(f"{len(ratings['subjects'])} subjects from {ratings['reports']} reports; "
           f"{len(changed)} files written" + (": " + ", ".join(p.relative_to(root).as_posix() for p in changed) if changed else ""))
     return 0

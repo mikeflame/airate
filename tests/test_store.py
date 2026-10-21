@@ -10,6 +10,8 @@ STORE = ROOT / "tools" / "store.sh"
 PRODUCER_WRITE = ["python3", "-c", "import pathlib; p=pathlib.Path('reports/o/r/x.json'); p.parent.mkdir(parents=True, exist_ok=True); p.write_text('{}\\n')"]
 PRODUCER_NOOP = ["true"]
 PRODUCER_REJECT = ["bash", "-c", "echo rejected; exit 1"]
+PRODUCER_WRITE_OUTSIDE = ["bash", "-c", "mkdir -p archive && echo '{}' > archive/x.json && echo archive/x.json >> \"$STORE_MANIFEST\" && mkdir -p badges && echo '{}' > badges/b.json && echo badges/b.json >> \"$STORE_MANIFEST\""]
+PRODUCER_WRITE_UNREADABLE = ["bash", "-c", "mkdir -p reports/o/r && echo '{}' > reports/o/r/x.json && echo reports/o/r/x.json >> \"$STORE_MANIFEST\" && mkdir -p badges && echo '{}' > badges/b.json && echo badges/b.json >> \"$STORE_MANIFEST\" && chmod 000 reports/o"]
 
 
 class StoreTests(unittest.TestCase):
@@ -35,11 +37,14 @@ class StoreTests(unittest.TestCase):
     def git(self, args, cwd):
         return subprocess.run(["git", "-c", "user.email=t@example.com", "-c", "user.name=t", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
-    def store(self, producer, remote="origin"):
+    def store(self, producer, remote="origin", paths="reports badges"):
         env = os.environ | {"STORE_BACKOFF": "0", "STORE_REMOTE": remote, "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_EMAIL": "t@example.com"}
-        proc = subprocess.run([str(STORE), "--message", "report: o/r (#1)", "--paths", "reports", "--comment", str(self.comment), "--", *producer],
+        proc = subprocess.run([str(STORE), "--message", "report: o/r (#1)", "--paths", paths, "--comment", str(self.comment), "--", *producer],
                               cwd=self.work, env=env, capture_output=True, text=True)
         return proc.returncode, proc.stdout + proc.stderr
+
+    def remote_has(self, path: str) -> bool:
+        return subprocess.run(["git", "--git-dir", str(self.remote), "cat-file", "-e", f"main:{path}"], capture_output=True).returncode == 0
 
     def remote_has_report(self) -> bool:
         proc = subprocess.run(["git", "--git-dir", str(self.remote), "cat-file", "-e", "main:reports/o/r/x.json"], capture_output=True)
@@ -86,6 +91,24 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse((self.work / "reports" / "o" / "r" / "x.json").exists(), "no sync, no producer, no local commit to mistake for success")
         self.assertIn("could not sync", self.comment.read_text())
+
+    def test_a_commit_missing_a_written_file_is_not_pushed(self):
+        code, out = self.store(PRODUCER_WRITE_OUTSIDE)
+        self.assertEqual(code, 2, out)
+        self.assertFalse(self.remote_has("badges/b.json"), "the half commit (badge without its report) must not reach main")
+        self.assertIn("could not be stored", self.comment.read_text())
+
+    def test_unstageable_report_blocks_the_push(self):
+        try:
+            code, out = self.store(PRODUCER_WRITE_UNREADABLE)
+        finally:
+            subprocess.run(["chmod", "-R", "u+rwx", str(self.work / "reports")], check=False)
+        # git add fails loudly on the unreadable directory, so the first attempt stages nothing and pushes nothing;
+        # the retry's producer then fails in the damaged workspace (its own exit code, 1). Either way: no push.
+        self.assertIn(code, (1, 2), out)
+        self.assertIn("could not open directory", out)
+        self.assertFalse(self.remote_has("badges/b.json"))
+        self.assertFalse(self.remote_has("reports/o/r/x.json"))
 
     def test_surviving_local_commit_is_discarded_before_the_producer_runs(self):
         # A previous attempt's unpushed commit must not make the producer believe the report is already on main.

@@ -62,7 +62,7 @@ class ValidateTests(unittest.TestCase):
         self.assertTrue(validate.validate_report(r))
         r = fixture("bench.json")
         r["bench"]["arms"]["with"]["trials"][0]["agent_error"] = True
-        self.assertIn("bench/arms/with/trials/0: agent_error and success cannot both be true", validate.validate_report(r))
+        self.assertEqual(validate.validate_report(r), [], "a solved trial whose agent then errored is still a solved trial")
 
     def test_intake_block_only_on_stored_reports(self):
         r = fixture("install.json")

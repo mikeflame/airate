@@ -8,6 +8,7 @@ Z = 1.28  # one-sided 90% Wilson bound per component; the index built from them 
 COMPONENT_WEIGHTS = {"works": 0.25, "first_try": 0.15, "retained": 0.3, "bench": 0.3}
 EVIDENCE_FOR_FULL_WEIGHT = 3.0
 NEUTRAL_UPLIFT = 0.5
+NEW_ACCOUNT_WEIGHT = 0.25
 
 
 def wilson_lower(p: float, n: float, z: float = Z) -> float:
@@ -45,11 +46,12 @@ def pick_unit(with_trials: list[dict], base_trials: list[dict]) -> str:
 
 
 def arm_summary(trials: list[dict], unit: str) -> dict:
-    """Solve rate and median cost per solved task for one arm."""
-    rate = sum(1 for t in trials if t["success"]) / len(trials)
-    median = float(statistics.median(_trial_value(t, unit) for t in trials))
-    cost_per_solve = median / rate if rate > 0 else math.inf
-    return {"trials": len(trials), "solve_rate": rate, "median_cost": median, "unit": unit, "cost_per_solve": cost_per_solve}
+    """Solve rate and cost per solved task for one arm: everything spent on the arm, failed trials included,
+    divided by the number of solved trials. The budget question, not the typical trial."""
+    solved = sum(1 for t in trials if t["success"])
+    total = float(sum(_trial_value(t, unit) for t in trials))
+    return {"trials": len(trials), "solved": solved, "solve_rate": solved / len(trials), "total_cost": total,
+            "unit": unit, "cost_per_solve": total / solved if solved else math.inf}
 
 
 def uplift_score(ratio: float) -> float:
@@ -63,14 +65,18 @@ def uplift_score(ratio: float) -> float:
 
 
 def bench_uplift(bench: dict) -> dict:
-    """Solve rate and cost per solved task of both arms, their ratio and the report's uplift score."""
+    """Solve rate and cost per solved task of both arms, their ratio and the report's uplift score.
+
+    A report in which neither arm solved anything is inconclusive: it compares nothing and carries no
+    uplift evidence (u is reported as neutral but conclusive is False)."""
     with_trials = bench["arms"]["with"]["trials"]
     base_trials = bench["arms"]["baseline"]["trials"]
     unit = pick_unit(with_trials, base_trials)
     w = arm_summary(with_trials, unit)
     b = arm_summary(base_trials, unit)
     cw, cb = w["cost_per_solve"], b["cost_per_solve"]
-    if math.isinf(cw) and math.isinf(cb):
+    conclusive = w["solved"] > 0 or b["solved"] > 0
+    if not conclusive:
         ratio = 1.0
     elif math.isinf(cw):
         ratio = 0.0
@@ -78,7 +84,11 @@ def bench_uplift(bench: dict) -> dict:
         ratio = 1.0 if cb == cw else math.inf
     else:
         ratio = cb / cw
-    return {"u": uplift_score(ratio), "ratio": ratio, "unit": unit, "with": w, "baseline": b}
+    return {"u": uplift_score(ratio), "ratio": ratio, "unit": unit, "conclusive": conclusive, "with": w, "baseline": b}
+
+
+def is_inconclusive(bench: dict) -> bool:
+    return not any(t["success"] for arm in bench["arms"].values() for t in arm["trials"])
 
 
 def proportion_component(num: float, den: float) -> dict | None:
@@ -103,6 +113,15 @@ def index(components: dict) -> dict:
         raw += scale * c["p"]
         lower += scale * c["lower"]
     return {"raw": raw, "lower": lower}
+
+
+def trust_weight(intake: dict) -> float:
+    """A report's weight before the repeat decay: 0 for maintainers, a quarter for new accounts, else 1.
+    Retention uses this, so a capped or decayed check-in still carries its agent's latest status."""
+    flags = intake.get("flags", [])
+    if "maintainer" in flags:
+        return 0.0
+    return NEW_ACCOUNT_WEIGHT if "new_account" in flags else 1.0
 
 
 def repeat_weight(base: float, counted_before: int) -> float:

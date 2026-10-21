@@ -26,7 +26,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
 FENCE_RE = re.compile(r"```(?:json)?\s*\n(.*?)\n```", re.S)
 NEW_ACCOUNT_DAYS = 30
-NEW_ACCOUNT_WEIGHT = 0.25
+NEW_ACCOUNT_WEIGHT = scoring.NEW_ACCOUNT_WEIGHT
 MAX_REPORTS_PER_SUBMITTER = 20
 
 
@@ -97,6 +97,8 @@ def weigh(report: dict, ctx: dict, root: pathlib.Path) -> tuple[float, list[str]
         if counted_before:
             flags.append("repeat")
         weight = scoring.repeat_weight(weight, counted_before)
+    if report["kind"] == "bench" and scoring.is_inconclusive(report["bench"]):
+        flags.append("inconclusive")  # stored and counted, but it compares nothing and adds no uplift evidence
     if report["kind"] == "bench" and report["bench"]["task"]["source"] == "airate":
         task_dir = root / "tasks" / report["bench"]["task"]["id"]
         if not task_dir.exists() or task_sha256(task_dir) != report["bench"]["task"]["sha256"]:
@@ -120,6 +122,7 @@ def register(ctx: dict, root: pathlib.Path) -> str:
     if not badge.exists():
         badge.parent.mkdir(parents=True, exist_ok=True)
         badge.write_text(json.dumps(compiler.badge_for(None)) + "\n")
+        compiler.record_written(root, [badge])
     return (f"Registered **{repo}**. Badge endpoint: `{badge.relative_to(root).as_posix()}` (shows *unrated* until the first "
             f"accepted report). See [FOR-MAINTAINERS.md](https://github.com/mikeflame/airate/blob/main/FOR-MAINTAINERS.md) for the README block.")
 
@@ -151,7 +154,7 @@ def accept(ctx: dict, root: pathlib.Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
     ratings = compiler.compile_ratings(root)
-    compiler.write_all(root, ratings)
+    compiler.record_written(root, [path] + compiler.write_all(root, ratings))
     entry = next((s for s in ratings["subjects"] if s["repo"].lower() == repo.lower()), None)
     rate = f"**{entry['rate']}** (rank {entry['rank']} of {len(ratings['subjects'])}, {entry['reports']} reports)" if entry else "unrated (this report carries no weight)"
     lines = [f"Accepted as `{path.relative_to(root).as_posix()}` with weight {weight:g}" + (f" — flags: {', '.join(flags)}" if flags else "") + ".",
