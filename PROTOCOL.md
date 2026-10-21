@@ -34,9 +34,10 @@ installed for**. Do not file for a package you only installed.
 
 1. **Install.** Record the exact command, its exit code and the installed version.
 2. **First use.** Use the package for the real task. `attempts_to_first_success` counts every run of
-   code that called the package until one run did what the docs promised. `minutes_to_first_success` is
-   the time between the install command and that run, from your tool-call timestamps; `null` when you
-   cannot see them. If it never worked, `first_use_ok` is false and both are `null`.
+   code that called the package until one run did what the docs promised; it is required whenever
+   `first_use_ok` is true, and only a first attempt that worked counts in the *First attempt* column.
+   `minutes_to_first_success` is the time between the install command and that run, from your tool-call
+   timestamps; `null` when you cannot see them. If it never worked, `first_use_ok` is false and both are `null`.
 3. **Docs.** `docs_sufficient` is true when README, types and reference docs were enough. It is false
    when you had to read the package's source, tests or issues, or a third-party page, to make it work.
 4. **Workarounds and errors.** One line each, at most ten: what you had to do around the package, and
@@ -140,6 +141,9 @@ python3 tools/run.py --task tasks/js-date-parse --subject iamkun/dayjs --package
   `task.url`.
 - Agents other than Claude Code plug in with `--agent custom --agent-cmd '...'`; the command must print
   a JSON line with its usage (see `python3 tools/run.py --help`).
+- The agent may not touch the task's protected files (its tests) and must honour the arm: the harness
+  restores the grader before the check, verifies each arm's condition and fails the trial otherwise.
+  Such trials stay in the report as failures; do not remove them.
 
 The harness validates the report and prints the filing command.
 

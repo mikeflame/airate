@@ -65,30 +65,51 @@ class BenchUpliftTests(unittest.TestCase):
         self.assertEqual(scoring.pick_unit([a], [c]), "duration_ms")
 
 
-class CompositeTests(unittest.TestCase):
-    def test_renormalises_over_present_components(self):
-        only = scoring.composite({"first_use": {"p": 0.8, "n": 10, "lower": 0.6}, "keep": None, "bench": None}, 10)
-        self.assertAlmostEqual(only["raw"], 0.8)
-        self.assertAlmostEqual(only["lower"], scoring.wilson_lower(0.8, 10))
+def _comp(p, n):
+    return scoring.proportion_component(p * n, n)
 
-    def test_weights(self):
-        comp = scoring.composite({"first_use": {"p": 1.0, "n": 3, "lower": 1.0}, "keep": {"p": 0.0, "n": 3, "lower": 0.0}, "bench": None}, 3)
-        self.assertAlmostEqual(comp["raw"], 0.4 / 0.7)
 
-    def test_thin_component_has_reduced_weight(self):
-        thick = {"first_use": {"p": 1.0, "n": 9, "lower": 0.9}, "keep": {"p": 1.0, "n": 9, "lower": 0.9}, "bench": None}
-        base = scoring.composite(thick, 9)
-        one_good = scoring.composite(thick | {"bench": {"p": 1.0, "n": 1, "lower": 0.4}}, 10)
-        one_flat = scoring.composite(thick | {"bench": {"p": 0.5, "n": 1, "lower": 0.2}}, 10)
-        three_flat = scoring.composite(thick | {"bench": {"p": 0.5, "n": 3, "lower": 0.3}}, 12)
-        self.assertAlmostEqual(one_flat["raw"], (0.7 + 0.1 * 0.5) / 0.8)
-        self.assertAlmostEqual(three_flat["raw"], 0.7 + 0.3 * 0.5)
-        self.assertGreater(one_good["lower"], base["lower"], "a first bench report that halves the cost must not lower the rate")
-        self.assertLess(one_flat["lower"], base["lower"], "a bench report that finds no uplift lowers it")
-        self.assertLess(three_flat["lower"], one_flat["lower"], "and three of them lower it more")
+class IndexTests(unittest.TestCase):
+    def test_missing_evidence_counts_as_zero(self):
+        self.assertEqual(scoring.index({"works": None, "first_try": None, "retained": None, "bench": None}), {"raw": 0.0, "lower": 0.0})
 
-    def test_empty(self):
-        self.assertEqual(scoring.composite({"first_use": None, "keep": None, "bench": None}, 0), {"raw": 0.0, "lower": 0.0, "n": 0})
+    def test_ladder(self):
+        one = scoring.index({"works": _comp(1, 1), "first_try": _comp(1, 1), "retained": None, "bench": None})
+        three = scoring.index({"works": _comp(1, 3), "first_try": _comp(1, 3), "retained": None, "bench": None})
+        ten = scoring.index({"works": _comp(1, 10), "first_try": _comp(1, 10), "retained": None, "bench": None})
+        full = scoring.index({"works": _comp(1, 10), "first_try": _comp(1, 10), "retained": _comp(1, 10), "bench": _comp(1, 10)})
+        self.assertEqual([round(100 * x["lower"]) for x in (one, three, ten, full)], [5, 26, 34, 86])
+        self.assertAlmostEqual(three["lower"], 0.4 * scoring.wilson_lower(1.0, 3))
+
+    def test_thin_component_scales_by_evidence(self):
+        self.assertAlmostEqual(scoring.index({"bench": _comp(1, 1)})["lower"], 0.3 * (1 / 3) * scoring.wilson_lower(1.0, 1))
+        self.assertAlmostEqual(scoring.index({"bench": _comp(1, 3)})["lower"], 0.3 * scoring.wilson_lower(1.0, 3))
+        self.assertAlmostEqual(scoring.index({"bench": _comp(1, 30)})["lower"], 0.3 * scoring.wilson_lower(1.0, 30))
+
+    def test_more_positive_evidence_never_lowers(self):
+        base = {"works": _comp(1, 9), "first_try": _comp(1, 9), "retained": None, "bench": None}
+        self.assertGreater(scoring.index(base | {"bench": _comp(1, 1)})["lower"], scoring.index(base)["lower"])
+        self.assertGreater(scoring.index(base | {"retained": _comp(1, 1)})["lower"], scoring.index(base)["lower"])
+        self.assertGreater(scoring.index(base | {"works": _comp(1, 10), "first_try": _comp(1, 10)})["lower"], scoring.index(base)["lower"])
+
+    def test_retention_cannot_stand_in_for_install_evidence(self):
+        comps = {"works": _comp(1, 3), "first_try": _comp(1, 3), "retained": _comp(1, 100), "bench": None}
+        idx = scoring.index(comps)
+        self.assertLess(idx["lower"], 0.56, "three installs plus a hundred weeklies stay far from the top")
+        self.assertAlmostEqual(idx["lower"], 0.4 * scoring.wilson_lower(1, 3) + 0.3 * scoring.wilson_lower(1, 100))
+
+
+class RepeatWeightTests(unittest.TestCase):
+    def test_harmonic(self):
+        self.assertEqual([scoring.repeat_weight(1.0, k) for k in range(4)], [1.0, 0.5, 1 / 3, 0.25])
+        self.assertEqual(scoring.repeat_weight(0.25, 1), 0.125)
+
+    def test_one_account_stays_low(self):
+        weights = [scoring.repeat_weight(1.0, k) for k in range(9)]
+        install, bench, weekly = weights[:3], weights[3:6], weights[6:]
+        comps = {"works": _comp(1, sum(install)), "first_try": _comp(1, sum(install)),
+                 "bench": _comp(1, sum(bench)), "retained": _comp(1, sum(weekly))}
+        self.assertLess(round(100 * scoring.index(comps)["lower"]), 20, "nine perfect reports from one account")
 
 
 if __name__ == "__main__":

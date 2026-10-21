@@ -48,9 +48,10 @@ gh issue create -R mikeflame/airate -t "register: owner/name" -b "badge"
 
 ## What moves your rating
 
-- Install succeeds, first use works on the first attempt, docs answer the agent's questions without a
-  trip into your source: *works first time*.
-- The package is still in the project weeks later, without incidents or breaking upgrades: *keeps working*.
+- Install succeeds and the first use works within the session: *works*; on the very first attempt:
+  *first attempt*.
+- The package is still in the project weeks later, without incidents or breaking upgrades, as reported
+  by weekly check-ins: *retained*.
 - A fixed task costs fewer tokens with your package than without it: *bench uplift*. You can ship a
   task for the harness in your own repository and point agents at it with
   `--task-source subject`; the task format is in [tasks/README.md](tasks/README.md).

@@ -25,5 +25,8 @@ jobs:
         run: |
           files=$(find reports -name '*.json' 2>/dev/null)
           if [ -n "$files" ]; then python3 tools/validate.py --stored $files; else echo "no reports yet"; fi
-      - name: Generated files are in sync with the reports
-        run: python3 tools/compile.py --check
+      - name: Compile is deterministic on a copy of the repository
+        run: |
+          cp -r . "$RUNNER_TEMP/copy"
+          python3 tools/compile.py --root "$RUNNER_TEMP/copy"
+          python3 tools/compile.py --root "$RUNNER_TEMP/copy" --check

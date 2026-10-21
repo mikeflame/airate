@@ -61,6 +61,8 @@ def semantic_errors(report: dict, stored: bool = False) -> list[str]:
             for key in ("attempts_to_first_success", "minutes_to_first_success"):
                 if inst.get(key) is not None:
                     errors.append(f"install/{key}: must be null when first_use_ok is false")
+        elif inst.get("attempts_to_first_success") is None:
+            errors.append("install/attempts_to_first_success: required when first_use_ok is true")
         tests = inst.get("tests")
         if tests and tests.get("ran") and "passed" not in tests:
             errors.append("install/tests/passed: required when tests ran")

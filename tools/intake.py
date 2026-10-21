@@ -19,6 +19,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import compile as compiler  # noqa: E402
+import scoring  # noqa: E402
 import validate  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -26,7 +27,7 @@ REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$
 FENCE_RE = re.compile(r"```(?:json)?\s*\n(.*?)\n```", re.S)
 NEW_ACCOUNT_DAYS = 30
 NEW_ACCOUNT_WEIGHT = 0.25
-MAX_REPORTS_PER_SUBMITTER = 3
+MAX_REPORTS_PER_SUBMITTER = 20
 
 
 class Rejected(Exception):
@@ -84,14 +85,18 @@ def weigh(report: dict, ctx: dict, root: pathlib.Path) -> tuple[float, list[str]
     if (now - created).days < NEW_ACCOUNT_DAYS:
         flags.append("new_account")
         weight *= NEW_ACCOUNT_WEIGHT
-    previous = [r for r in existing_reports(root, report["subject"]["repo"])
-                if r["intake"]["submitter"].lower() == login and r["kind"] == report["kind"]]
-    if report["kind"] == "weekly" and any(r["weekly"]["week_of"] == report["weekly"]["week_of"] for r in previous):
+    previous = [r for r in existing_reports(root, report["subject"]["repo"]) if r["intake"]["submitter"].lower() == login]
+    if report["kind"] == "weekly" and any(r["kind"] == "weekly" and r["weekly"]["week_of"] == report["weekly"]["week_of"] for r in previous):
         flags.append("duplicate_week")
         weight = 0.0
     elif len(previous) >= MAX_REPORTS_PER_SUBMITTER:
         flags.append("cap")
         weight = 0.0
+    else:
+        counted_before = sum(1 for r in previous if r["intake"]["weight"] > 0)
+        if counted_before:
+            flags.append("repeat")
+        weight = scoring.repeat_weight(weight, counted_before)
     if report["kind"] == "bench" and report["bench"]["task"]["source"] == "airate":
         task_dir = root / "tasks" / report["bench"]["task"]["id"]
         if not task_dir.exists() or task_sha256(task_dir) != report["bench"]["task"]["sha256"]:
@@ -159,6 +164,12 @@ def main(argv: list[str]) -> int:
     ctx = json.loads(pathlib.Path(args.context).read_text())
     root = pathlib.Path(args.root)
     title = ctx["title"].strip()
+    if ctx.get("lookup_failed"):
+        message = ("Intake could not verify the facts it needs from the GitHub API (" + "; ".join(ctx.get("lookup_errors", [])) +
+                   "). Nothing was stored. Edit the issue to retry.")
+        pathlib.Path(args.comment).write_text(message + "\n")
+        print(message)
+        return 2
     try:
         if title.lower().startswith("register:"):
             message = register(ctx, root)

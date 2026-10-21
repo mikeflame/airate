@@ -12,6 +12,10 @@ Usage:
 
 A custom agent command must print, as its last stdout line, a JSON object with any of: input_tokens,
 output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, duration_ms, turns, model, error (boolean).
+
+A task's `protected` files (its grader) are snapshotted after the arm's setup and restored before the check;
+a trial whose agent changed them fails. Each arm's `verify` command must pass for the trial to count, so an
+agent that ignores the subject in the with arm, or installs it in the baseline, fails that trial.
 """
 from __future__ import annotations
 
@@ -107,6 +111,7 @@ def run_trial(args: argparse.Namespace, task: dict, task_dir: pathlib.Path, arm:
         workspace.mkdir(parents=True)
     arm_spec = task["arms"][arm]
     setup_rc = run_shell(arm_spec.get("setup", ""), workspace, SETUP_TIMEOUT_S, trial_dir / "setup.log")
+    protected = {name: (workspace / name).read_bytes() for name in task.get("protected", []) if (workspace / name).exists()}
     prompt = task["prompt"].rstrip() + "\n\n" + arm_spec.get("prompt_suffix", "")
     prompt_file = trial_dir / "prompt.md"
     prompt_file.write_text(prompt)
@@ -128,9 +133,14 @@ def run_trial(args: argparse.Namespace, task: dict, task_dir: pathlib.Path, arm:
         (trial_dir / "agent.stderr").write_text(f"{type(exc).__name__}: {exc}\n")
     wall_ms = int((time.monotonic() - started) * 1000)
     (trial_dir / "agent.out").write_text(stdout)
+    grader_intact = all((workspace / name).exists() and (workspace / name).read_bytes() == content for name, content in protected.items())
+    for name, content in protected.items():  # the check always runs against the task's own grader
+        (workspace / name).write_bytes(content)
     check_rc = run_shell(task["check"], workspace, task.get("check_timeout_s", 300), trial_dir / "check.log")
+    verify = arm_spec.get("verify", "")
+    arm_ok = run_shell(verify, workspace, task.get("check_timeout_s", 300), trial_dir / "verify.log") == 0
     trial = {
-        "success": check_rc == 0 and setup_rc == 0,
+        "success": check_rc == 0 and setup_rc == 0 and grader_intact and arm_ok,
         "duration_ms": int(metrics.get("duration_ms") or wall_ms),
         "turns": metrics.get("turns"),
         "input_tokens": metrics.get("input_tokens"),
@@ -139,9 +149,12 @@ def run_trial(args: argparse.Namespace, task: dict, task_dir: pathlib.Path, arm:
         "cache_write_tokens": metrics.get("cache_write_tokens"),
         "cost_usd": metrics.get("cost_usd"),
         "agent_error": bool(metrics.get("error")),
+        "grader_intact": grader_intact,
+        "arm_ok": arm_ok,
     }
     (trial_dir / "trial.json").write_text(json.dumps(trial | {"model": metrics.get("model"), "setup_rc": setup_rc, "check_rc": check_rc}, indent=2) + "\n")
-    print(f"  {arm} #{index}: {'PASS' if trial['success'] else 'FAIL'} in {trial['duration_ms']} ms"
+    print(f"  {arm} #{index}: {'PASS' if trial['success'] else 'FAIL'}"
+          + ("" if grader_intact else " (grader modified)") + ("" if arm_ok else " (arm condition not met)") + f" in {trial['duration_ms']} ms"
           + (f", ${trial['cost_usd']:.4f}" if trial["cost_usd"] is not None else "")
           + (f", {trial['turns']} turns" if trial["turns"] is not None else ""), flush=True)
     return trial, metrics.get("model")

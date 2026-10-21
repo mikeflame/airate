@@ -42,6 +42,9 @@ class ValidateTests(unittest.TestCase):
         r["install"]["attempts_to_first_success"] = None
         r["install"]["minutes_to_first_success"] = None
         self.assertEqual(validate.validate_report(r), [])
+        r = fixture("install.json")
+        del r["install"]["attempts_to_first_success"]
+        self.assertIn("install/attempts_to_first_success: required when first_use_ok is true", validate.validate_report(r))
 
     def test_weekly_rules(self):
         r = fixture("weekly.json")

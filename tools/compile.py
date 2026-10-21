@@ -48,36 +48,32 @@ def badge_for(rate: int | None) -> dict:
 
 
 def score_subject(reports: list[dict]) -> dict:
-    """Aggregate every counted report of one subject into components and the composite. See SCORING.md."""
-    first_num = first_den = keep_num = keep_den = bench_num = bench_den = 0.0
+    """Aggregate every counted report of one subject into components and the index. See SCORING.md."""
+    sums = {k: [0.0, 0.0] for k in ("works", "first_try", "retained", "bench")}
     ratios: list[float] = []
+
+    def add(name: str, w: float, x: float) -> None:
+        sums[name][0] += w * x
+        sums[name][1] += w
+
     for r in reports:
         w = r["_weight"]
         if r["kind"] == "install":
             inst = r["install"]
-            first_den += w
-            first_num += w * inst["first_use_ok"]
-            keep_den += w
-            keep_num += w * (inst["verdict"] == "keep")
+            add("works", w, inst["first_use_ok"])
+            add("first_try", w, inst["first_use_ok"] and inst.get("attempts_to_first_success") == 1)
         elif r["kind"] == "weekly":
             wk = r["weekly"]
-            keep_den += w
-            keep_num += w * (wk["status"] == "still_used" and wk["verdict"] != "replace")
+            add("retained", w, wk["status"] == "still_used" and wk["verdict"] != "replace")
         elif r["kind"] == "bench":
             up = scoring.bench_uplift(r["bench"])
-            bench_den += w
-            bench_num += w * up["u"]
+            add("bench", w, up["u"])
             ratios.append(up["ratio"])
-    components = {
-        "first_use": scoring.proportion_component(first_num, first_den),
-        "keep": scoring.proportion_component(keep_num, keep_den),
-        "bench": scoring.proportion_component(bench_num, bench_den),
-    }
-    comp = scoring.composite(components, sum(r["_weight"] for r in reports))
-    bench = components["bench"]
-    if bench is not None:
-        bench["ratio"] = statistics.median(ratios)
-    return {"components": components, "raw": comp["raw"], "lower": comp["lower"], "rate": round(100 * comp["lower"])}
+    components = {name: scoring.proportion_component(num, den) for name, (num, den) in sums.items()}
+    if components["bench"] is not None:
+        components["bench"]["ratio"] = statistics.median(ratios)
+    idx = scoring.index(components)
+    return {"components": components, "raw": idx["raw"], "lower": idx["lower"], "rate": round(100 * idx["lower"])}
 
 
 def compile_ratings(root: pathlib.Path) -> dict:
@@ -156,19 +152,20 @@ def _ratio(c: dict | None) -> str:
 
 def render_rows(subjects: list[dict], full: bool) -> list[str]:
     if full:
-        head = "| # | Repository | Type | AI Rate | Works first time | Keeps working | Bench uplift | Reports | Submitters | Agents | Last report |"
-        sep = "|--:|---|---|--:|---|---|---|--:|--:|---|---|"
+        head = "| # | Repository | Type | AI Rate | Works | First attempt | Retained | Bench uplift | Reports | Submitters | Agents | Last report |"
+        sep = "|--:|---|---|--:|---|---|---|---|--:|--:|---|---|"
     else:
-        head = "| # | Repository | AI Rate | Works first time | Keeps working | Reports |"
-        sep = "|--:|---|--:|---|---|--:|"
+        head = "| # | Repository | AI Rate | Works | First attempt | Retained | Bench uplift | Reports |"
+        sep = "|--:|---|--:|---|---|---|---|--:|"
     rows = [head, sep]
     for s in subjects:
         repo = f"[{s['repo']}](https://github.com/{s['repo']})"
         c = s["components"]
+        cells = f"{_pct(c['works'])} | {_pct(c['first_try'])} | {_pct(c['retained'])} | {_ratio(c['bench'])}"
         if full:
-            rows.append(f"| {s['rank']} | {repo} | {s['type']} | **{s['rate']}** | {_pct(c['first_use'])} | {_pct(c['keep'])} | {_ratio(c['bench'])} | {s['reports']} | {s['submitters']} | {', '.join(s['agents'])} | {s['last_report'][:10]} |")
+            rows.append(f"| {s['rank']} | {repo} | {s['type']} | **{s['rate']}** | {cells} | {s['reports']} | {s['submitters']} | {', '.join(s['agents'])} | {s['last_report'][:10]} |")
         else:
-            rows.append(f"| {s['rank']} | {repo} | **{s['rate']}** | {_pct(c['first_use'])} | {_pct(c['keep'])} | {s['reports']} |")
+            rows.append(f"| {s['rank']} | {repo} | **{s['rate']}** | {cells} | {s['reports']} |")
     return rows
 
 
@@ -178,7 +175,7 @@ def render_ratings_md(ratings: dict) -> str:
         "",
         f"Compiled from {ratings['reports']} reports, the last accepted {ratings['generated_at'] or 'never'}. Generated file: do not edit; see [SCORING.md](SCORING.md) for the formula and [PROTOCOL.md](PROTOCOL.md) to add a report.",
         "",
-        "**AI Rate** is the lower confidence bound of the composite, so a repository climbs as independent agents confirm it. Percentages are weighted point estimates with the effective number of reports in brackets. Bench uplift is cost per solved task without the repository divided by cost with it.",
+        "**AI Rate** is an evidence-weighted index (0–100), not a probability: each column's Wilson lower bound, scaled by its weight and by how much evidence it has; missing evidence counts as zero. Columns are weighted point estimates with the effective number of reports in brackets. *Works* is first-use success within the session, *First attempt* success on the first try, *Retained* comes only from weekly check-ins, *Bench uplift* is cost per solved task without the repository divided by cost with it.",
         "",
     ]
     if ratings["subjects"]:
@@ -211,8 +208,12 @@ def generated_files(root: pathlib.Path, ratings: dict) -> dict[pathlib.Path, str
     }
     if (root / "README.md").exists():
         files[root / "README.md"] = update_readme(root, ratings)
+    listed = {s["badge"] for s in ratings["subjects"]}
     for s in ratings["subjects"]:
         files[root / s["badge"]] = json.dumps(badge_for(s["rate"])) + "\n"
+    for path in (root / "badges").rglob("*.json") if (root / "badges").exists() else []:
+        if path.relative_to(root).as_posix() not in listed:
+            files[path] = json.dumps(badge_for(None)) + "\n"  # the subject lost its counted evidence
     return files
 
 
