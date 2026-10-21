@@ -4,4 +4,4 @@ runs/
 .airate.json
 node_modules/
 .DS_Store
-runs-bench.log
+runs-bench*.log
