@@ -4,6 +4,7 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 from helpers import FIXTURES, ROOT, fixture
@@ -20,6 +21,10 @@ if "TAMPER" in prompt:
     (cwd / "seed.txt").write_text("the grader is now whatever I want")
 if "CRASH" in prompt:
     sys.exit(1)
+if "LINGER" in prompt:
+    import subprocess
+    subprocess.Popen(["bash", "-c", "sleep 2; echo late > done.txt"])
+    time.sleep(30)
 print("some agent chatter")
 print(json.dumps({"input_tokens": 100, "output_tokens": 50, "cost_usd": 0.01, "duration_ms": 5, "turns": 2, "model": "fake-1"}))
 '''
@@ -140,6 +145,21 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("inconclusive", buf.getvalue())
 
+    def test_timeout_kills_the_whole_process_tree(self):
+        self.spec["timeout_s"] = 1
+        self.spec["arms"]["with"]["prompt_suffix"] = "LINGER, FAIL to write anything yourself"
+        (self.task / "task.json").write_text(json.dumps(self.spec))
+        out = self.dir / "runs"
+        run.main(["--task", str(self.task), "--subject", "acme/thing", "--agent", "custom",
+                  "--agent-cmd", f"python3 {self.agent} {{prompt_file}} {{cwd}}", "--trials", "1", "--arms", "with",
+                  "--task-source", "custom", "--out", str(out)])
+        trial = json.loads(next(out.rglob("trial.json")).read_text())
+        self.assertTrue(trial["agent_error"])
+        self.assertFalse(trial["success"], "work finished after the deadline must not count")
+        self.assertLess(trial["duration_ms"], 1900)
+        time.sleep(2.5)
+        self.assertFalse((next(out.rglob("workspace")) / "done.txt").exists(), "the agent's child was killed with it")
+
     def test_agent_failure_is_recorded_not_fatal(self):
         out = self.dir / "runs"
         code = run.main(["--task", str(self.task), "--subject", "acme/thing", "--agent", "custom",
@@ -209,6 +229,35 @@ class DateTaskTests(unittest.TestCase):
             self.assertEqual(self.sh(self.task["check"], ws), 0)
             self.assertEqual(self.sh(self.task["arms"]["with"]["verify"], ws), 0, "tests fail once dayjs is hidden")
             self.assertNotEqual(self.sh(self.task["arms"]["baseline"]["verify"], ws), 0, "and the baseline check fails for the same solution")
+
+
+class ConfigTaskTests(unittest.TestCase):
+    """The Python task must be solvable with the standard library, fail on an empty workspace, and its baseline
+    arm check must accept a dependency-free solution in a plain venv."""
+
+    task = json.loads((ROOT / "tasks" / "py-config-validate" / "task.json").read_text())
+
+    def workspace(self, tmp, solution: bool) -> pathlib.Path:
+        ws = pathlib.Path(tmp) / "ws"
+        shutil.copytree(ROOT / "tasks" / "py-config-validate" / "workspace", ws)
+        if solution:
+            shutil.copy(FIXTURES / "reference_validate_config.py", ws / "validate_config.py")
+        subprocess.run(["bash", "-c", self.task["arms"]["baseline"]["setup"]], cwd=ws, check=True, capture_output=True)
+        return ws
+
+    def sh(self, cmd: str, ws: pathlib.Path) -> int:
+        return subprocess.run(["bash", "-c", cmd], cwd=ws, capture_output=True).returncode
+
+    def test_reference_solution_passes_and_baseline_verifies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = self.workspace(tmp, solution=True)
+            self.assertEqual(self.sh(self.task["check"], ws), 0)
+            self.assertEqual(self.sh(self.task["arms"]["baseline"]["verify"], ws), 0)
+            self.assertNotEqual(self.sh(self.task["arms"]["with"]["verify"], ws), 0, "no jsonschema in the venv: the with arm cannot be verified")
+
+    def test_empty_workspace_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotEqual(self.sh(self.task["check"], self.workspace(tmp, solution=False)), 0)
 
 
 if __name__ == "__main__":

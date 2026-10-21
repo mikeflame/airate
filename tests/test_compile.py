@@ -106,6 +106,19 @@ class CompileTests(unittest.TestCase):
         c = compiler.compile_ratings(self.root)["subjects"][0]["components"]
         self.assertEqual(c["retained"]["p"], 0.5, "a duplicate-week report never speaks for an agent")
 
+    def test_latest_check_in_is_by_instant_not_string(self):
+        store(self.root, fixture("install.json"), issue=1, submitter="a")
+        early = fixture("weekly.json")
+        early["created_at"] = "2026-10-26T23:00:00+14:00"   # 09:00 UTC, still used
+        store(self.root, early, issue=2, submitter="a")
+        late = fixture("weekly.json")
+        late["created_at"] = "2026-10-26T10:00:00Z"         # 10:00 UTC, removed: the later instant
+        late["weekly"].update({"status": "removed", "verdict": "replace"})
+        store(self.root, late, issue=3, submitter="a")
+        s = compiler.compile_ratings(self.root)["subjects"][0]
+        self.assertEqual(s["components"]["retained"]["p"], 0.0)
+        self.assertEqual(s["last_report"], "2026-10-26T10:00:00Z")
+
     def test_second_attempt_is_not_first_try(self):
         r = fixture("install.json")
         r["install"]["attempts_to_first_success"] = 2

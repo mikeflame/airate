@@ -1,6 +1,6 @@
 # Bench tasks
 
-Each directory is one task for `tools/run.py`: a `task.json` with the prompt, the check command and the
+Two tasks ship today: `js-date-parse` (JavaScript, dayjs versus the Node standard library) and `py-config-validate` (Python, jsonschema versus the standard library). Each directory is one task for `tools/run.py`: a `task.json` with the prompt, the check command and the
 two arms, plus a `workspace/` copied fresh for every trial. The `with` arm installs or enables the subject;
 the `baseline` arm does the same job without it. The check command, not the agent, decides success.
 
@@ -13,6 +13,10 @@ pass (*baseline* arm); both restore what they hid. A solution that imports the s
 still passes, so the prompt and the task design carry the rest. `subjects` names the repositories the
 task is written for: the harness refuses any other subject, and the intake gives weight 0 to a report
 that pairs the task with one.
+
+`timeout_s` bounds the agent: on expiry the harness kills the agent's whole process group and only then
+grades, so work finished after the deadline does not count and the trial's duration is the deadline. A
+process that starts its own session escapes the group; tasks should not rely on agents that do.
 
 Success is the check's verdict alone: a trial whose agent crashed or timed out after writing a passing
 solution is a solved trial with missing metrics. Cost per solved task is the arm's total spend divided by

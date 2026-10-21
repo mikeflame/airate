@@ -1,7 +1,11 @@
+# Development ignores are anchored to the root: a report for a repository named "runs" or "node_modules"
+# lives under reports/ and must never be ignored, so the data paths are re-included last.
 __pycache__/
 *.pyc
-runs/
-.airate.json
+/runs/
+/runs-bench*.log
+/.airate.json
 node_modules/
 .DS_Store
-runs-bench*.log
+!/reports/**
+!/badges/**

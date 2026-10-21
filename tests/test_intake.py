@@ -1,5 +1,6 @@
 import json
 import pathlib
+import subprocess
 import tempfile
 import unittest
 
@@ -157,6 +158,16 @@ class IntakeTests(unittest.TestCase):
         report = json.loads(self.stored()[0].read_text())
         self.assertEqual((report["intake"]["weight"], report["intake"]["flags"]), (1.0, ["inconclusive"]))
         self.assertIn("unrated", msg, "it contributes to no column, so the subject has no rate yet")
+
+    def test_report_that_git_would_ignore_is_refused(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        (self.root / ".gitignore").write_text("runs/\n")
+        body = fixture("install.json")
+        body["subject"]["repo"] = "nellore/runs"
+        code, msg = self.run_intake(ctx(self.root, title="report: nellore/runs", body=json.dumps(body)))
+        self.assertEqual(code, 2)
+        self.assertIn("ignored by .gitignore", msg)
+        self.assertEqual(self.stored(), [], "nothing is left on disk to be mistaken for an accepted report")
 
     def test_register(self):
         code, msg = self.run_intake(ctx(self.root, title="register: tj/commander.js"))
