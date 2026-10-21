@@ -59,6 +59,31 @@ class ValidateConfigTests(unittest.TestCase):
     def test_unknown_keys(self):
         self.assert_error_mentions({**VALID_FAST, "colour": "blue"}, "colour")
 
+    def test_invalid_types_never_raise(self):
+        cases = {
+            "name": [None, [], {}, 7, True],
+            "port": [None, [], {}, "8080", 8.0],
+            "mode": [None, [], {}, 1, True, "FAST"],
+            "tags": [None, {}, "blue", 1, [None], [["blue"]], [{"x": 1}]],
+            "retries": [None, [], {}, "3", True, 2.5],
+            "db": [None, [], "db.internal:5432", 1, {"host": None, "port": None}, {"host": [], "port": {}}],
+        }
+        for field, values in cases.items():
+            for value in values:
+                config = {**VALID_SAFE, field: value}
+                with self.subTest(field=field, value=value):
+                    try:
+                        errors = validate_config(config)
+                    except Exception as exc:  # noqa: BLE001
+                        self.fail(f"validate_config raised {type(exc).__name__} for {field}={value!r}")
+                    self.assertIsInstance(errors, list)
+                    self.assertTrue(errors and all(isinstance(e, str) for e in errors), f"no error for {field}={value!r}")
+                    self.assertTrue(any(field in e for e in errors), f"no error mentions {field!r}: {errors}")
+
+    def test_mode_type_decides_db_requirement_without_raising(self):
+        self.assert_error_mentions({"name": "api", "port": 80, "mode": []}, "mode")
+        self.assert_error_mentions({"name": "api", "port": 80, "mode": {}}, "mode")
+
 
 if __name__ == "__main__":
     unittest.main()

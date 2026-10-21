@@ -53,10 +53,11 @@ same unit for both arms). That is the budget question: what it costs to get one 
 trials costing 1, 1 and 1000 are worse than three costing 2. With `r = baseline ÷ with`,
 `x = clamp(0.5 + ½·log₂ r, 0, 1)`: halving the cost per solve is full marks, no change is 0.5, doubling
 the cost is zero; `1` when the task is unsolvable without the subject, `0` when it is unsolvable with it.
-A trial whose arm condition was not met (`arm_ok: false`: the agent ignored the subject in the *with*
-arm, or pulled in a third-party package in the *baseline*) is **void**: it measured nothing, so it counts
-neither as solved nor in the arm's spend; the report keeps it and the harness prints the count. A
-modified grader is a failure, not a void. A report in which an arm has no attempted trial, or in which
+A trial is **void** (`arm_ok: false`) when it broke its arm's policy (a third-party package in the
+*baseline*, the subject removed from the *with* arm) or when its passing solution turned out not to need
+the subject: it measured nothing, so it counts neither as solved nor in the arm's spend, and void trials
+are ignored when the comparison unit is chosen. A wrong answer that kept the policy is a failed attempt
+in either arm and keeps its cost. A modified grader is a failure, not a void. A report in which an arm has no attempted trial, or in which
 neither arm solved anything, is **inconclusive**: it compares nothing, is stored with the `inconclusive`
 flag and contributes to no column. A trial succeeds when the task's check passes; an
 agent that crashed, timed out or hit its turn limit after writing a passing solution still solved it, and

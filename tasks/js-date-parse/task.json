@@ -17,14 +17,16 @@
     "with": {
       "setup": "npm install --no-audit --no-fund --loglevel=error dayjs@1",
       "prompt_suffix": "The npm package `dayjs` is already installed in this directory; use it (its `customParseFormat` plugin handles the explicit formats).",
-      "verify": "test -d node_modules/dayjs && mv node_modules/dayjs node_modules/.hidden-dayjs && { node --test test.mjs >/dev/null 2>&1 && rc=1 || rc=0; }; mv node_modules/.hidden-dayjs node_modules/dayjs 2>/dev/null; exit ${rc:-1}",
-      "verify_doc": "the subject is necessary: with node_modules/dayjs hidden, the tests must fail"
+      "policy": "test -d node_modules/dayjs",
+      "policy_doc": "the subject is still installed",
+      "necessity": "mv node_modules/dayjs node_modules/.hidden-dayjs && { node --test test.mjs >/dev/null 2>&1 && rc=1 || rc=0; }; mv node_modules/.hidden-dayjs node_modules/dayjs 2>/dev/null; exit ${rc:-1}",
+      "necessity_doc": "after a passing check: with node_modules/dayjs hidden, the tests must fail"
     },
     "baseline": {
       "setup": "",
       "prompt_suffix": "Do not add or install any third-party dependency; use only what Node.js ships with.",
-      "verify": "rc=1; { test -d node_modules && mv node_modules .hidden-node_modules; node --test test.mjs >/dev/null 2>&1; rc=$?; test -d .hidden-node_modules && mv .hidden-node_modules node_modules; }; exit $rc",
-      "verify_doc": "no third-party package is necessary: with node_modules hidden, the tests must pass"
+      "policy": "! test -d node_modules || test -z \"$(ls -A node_modules 2>/dev/null | grep -v '^\\.')\"",
+      "policy_doc": "no third-party package is installed (node_modules absent or empty)"
     }
   }
 }

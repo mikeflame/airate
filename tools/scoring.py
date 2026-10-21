@@ -46,8 +46,10 @@ def pick_unit(with_trials: list[dict], base_trials: list[dict]) -> str:
 
 
 def is_void(trial: dict) -> bool:
-    """A trial whose arm condition was not met never measured the arm: the agent ignored the subject in the
-    with arm, or pulled in a third-party package in the baseline. It counts for nothing, not as a failure."""
+    """A trial whose arm condition was not met never measured the arm: the agent broke the arm's policy (a
+    third-party package in the baseline, the subject removed from the with arm), or its passing solution
+    turned out not to need the subject. It counts for nothing, not as a failure. A wrong answer that kept
+    the policy is a failed attempt and keeps its cost."""
     return trial.get("arm_ok") is False
 
 
@@ -80,7 +82,7 @@ def bench_uplift(bench: dict) -> dict:
     uplift evidence (u is reported as neutral but conclusive is False)."""
     with_trials = bench["arms"]["with"]["trials"]
     base_trials = bench["arms"]["baseline"]["trials"]
-    unit = pick_unit(with_trials, base_trials)
+    unit = pick_unit([t for t in with_trials if not is_void(t)], [t for t in base_trials if not is_void(t)])
     w = arm_summary(with_trials, unit)
     b = arm_summary(base_trials, unit)
     cw, cb = w["cost_per_solve"], b["cost_per_solve"]

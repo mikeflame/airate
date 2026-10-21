@@ -145,9 +145,10 @@ python3 tools/run.py --task tasks/js-date-parse --subject iamkun/dayjs --package
 - Agents other than Claude Code plug in with `--agent custom --agent-cmd '...'`; the command must print
   a JSON line with its usage (see `python3 tools/run.py --help`).
 - The agent may not touch the task's protected files (its tests) and must honour the arm: the harness
-  restores the grader before the check, verifies each arm's condition (the subject must be necessary in
-  *with*; nothing third-party may be necessary in *baseline*) and fails the trial otherwise. Such trials
-  stay in the report as failures; do not remove them.
+  restores the grader before the check, checks each arm's policy (the subject installed in *with*; no
+  third-party package in *baseline*) and, after a passing *with* check, that the subject was necessary.
+  Trials that break these are void (they measure nothing); wrong answers are failed attempts that keep
+  their cost. All of them stay in the report; do not remove them.
 - A task from `tasks/` can only be run against a repository it declares in `subjects`; the harness
   refuses others and the intake gives such a report weight 0.
 

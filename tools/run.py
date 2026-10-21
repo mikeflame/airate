@@ -19,10 +19,12 @@ solution still solved the task. `agent_error` marks that the agent's own metrics
 and the comparison then falls back to a unit every trial has (tokens, else wall-clock time).
 
 A task's `protected` files (its grader) are snapshotted after the arm's setup and restored before the check;
-a trial whose agent changed them fails. Each arm's `verify` command must pass for the trial to count: the
-shipped task hides the subject and requires the tests to fail without it (with arm), and requires the tests
-to pass with no third-party packages at all (baseline arm). A task that declares `subjects` can only be run
-against one of them.
+a trial whose agent changed them fails. Each arm's `policy` command states the arm condition independently
+of correctness (the subject installed in the with arm; no third-party package in the baseline); a trial that
+breaks it is void. The with arm's `necessity` command runs only after a passing check and must prove the
+subject was needed (the tests fail with it hidden); a passing solution that did not need it is void. A wrong
+answer that kept the policy is a failed attempt and keeps its cost. A task that declares `subjects` can only
+be run against one of them.
 """
 from __future__ import annotations
 
@@ -160,8 +162,12 @@ def run_trial(args: argparse.Namespace, task: dict, task_dir: pathlib.Path, arm:
     for name, content in protected.items():  # the check always runs against the task's own grader
         (workspace / name).write_bytes(content)
     check_rc = run_shell(task["check"], workspace, task.get("check_timeout_s", 300), trial_dir / "check.log")
-    verify = arm_spec.get("verify", "")
-    arm_ok = run_shell(verify, workspace, task.get("check_timeout_s", 300), trial_dir / "verify.log") == 0
+    budget = task.get("check_timeout_s", 300)
+    policy_ok = run_shell(arm_spec.get("policy", ""), workspace, budget, trial_dir / "policy.log") == 0
+    necessity_ok = True
+    if check_rc == 0 and arm_spec.get("necessity"):
+        necessity_ok = run_shell(arm_spec["necessity"], workspace, budget, trial_dir / "necessity.log") == 0
+    arm_ok = policy_ok and necessity_ok
     trial = {
         "success": check_rc == 0 and setup_rc == 0 and grader_intact and arm_ok,
         "duration_ms": int(metrics.get("duration_ms") or wall_ms),
@@ -177,7 +183,8 @@ def run_trial(args: argparse.Namespace, task: dict, task_dir: pathlib.Path, arm:
     }
     (trial_dir / "trial.json").write_text(json.dumps(trial | {"model": metrics.get("model"), "setup_rc": setup_rc, "check_rc": check_rc}, indent=2) + "\n")
     print(f"  {arm} #{index}: {'PASS' if trial['success'] else 'FAIL'}"
-          + ("" if grader_intact else " (grader modified)") + ("" if arm_ok else " (void: arm condition not met)") + f" in {trial['duration_ms']} ms"
+          + ("" if grader_intact else " (grader modified)") + ("" if policy_ok else " (void: arm policy broken)")
+          + ("" if necessity_ok else " (void: subject not necessary)") + f" in {trial['duration_ms']} ms"
           + (f", ${trial['cost_usd']:.4f}" if trial["cost_usd"] is not None else "")
           + (f", {trial['turns']} turns" if trial["turns"] is not None else ""), flush=True)
     return trial, metrics.get("model")
