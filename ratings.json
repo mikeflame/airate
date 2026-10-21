@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-21T11:11:35Z",
+  "generated_at": "2026-10-21T13:10:09Z",
   "protocol": 1,
-  "reports": 5,
+  "reports": 6,
   "revoked": [
     {
       "reason": "Graded by a test file that never probed invalid field types: a validator raising TypeError on mode: [] passed all nine tests, so the comparison rewarded incomplete validation. The task's grader now covers invalid types across every field; the run is being repeated on the fixed task.",
@@ -15,7 +15,12 @@
       ],
       "badge": "badges/python-jsonschema/jsonschema.json",
       "components": {
-        "bench": null,
+        "bench": {
+          "lower": 0.0,
+          "n": 0.33,
+          "p": 0.0,
+          "ratio": 0.0
+        },
         "first_try": {
           "lower": 0.379,
           "n": 1.0,
@@ -29,22 +34,23 @@
         }
       },
       "kinds": {
-        "bench": 0,
+        "bench": 1,
         "bench_inconclusive": 0,
         "install": 1,
         "weekly": 0
       },
-      "last_report": "2026-10-21T07:30:00Z",
+      "last_report": "2026-10-21T13:09:19Z",
       "lower": 0.0505,
       "models": [
-        "claude-fable-5-1"
+        "claude-fable-5-1",
+        "claude-haiku-4-5-20251001"
       ],
       "rank": 1,
       "rate": 5,
       "raw": 0.1333,
       "repo": "python-jsonschema/jsonschema",
-      "reports": 1,
-      "reports_total": 1,
+      "reports": 2,
+      "reports_total": 2,
       "submitters": 1,
       "type": "library"
     },
