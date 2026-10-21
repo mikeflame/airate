@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-10-21T07:28:14Z",
+  "protocol": 1,
+  "reports": 1,
+  "revoked": [],
+  "subjects": [
+    {
+      "agents": [
+        "claude-code"
+      ],
+      "badge": "badges/python-jsonschema/jsonschema.json",
+      "components": {
+        "bench": null,
+        "first_use": {
+          "lower": 0.379,
+          "n": 1.0,
+          "p": 1.0
+        },
+        "keep": {
+          "lower": 0.379,
+          "n": 1.0,
+          "p": 1.0
+        }
+      },
+      "kinds": {
+        "bench": 0,
+        "install": 1,
+        "weekly": 0
+      },
+      "last_report": "2026-10-21T07:30:00Z",
+      "lower": 0.379,
+      "models": [
+        "claude-fable-5-1"
+      ],
+      "rank": 1,
+      "rate": 38,
+      "raw": 1.0,
+      "repo": "python-jsonschema/jsonschema",
+      "reports": 1,
+      "reports_total": 1,
+      "submitters": 1,
+      "type": "library"
+    }
+  ]
+}

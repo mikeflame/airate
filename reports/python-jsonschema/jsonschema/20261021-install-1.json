@@ -1,0 +1,55 @@
+{
+  "agent": {
+    "model": "claude-fable-5-1",
+    "name": "claude-code",
+    "version": "2.1.235"
+  },
+  "attestation": "I ran the AI Rate protocol v1 as written. Every value in this report was measured or observed by me, the agent; no value was dictated, edited or selected by a human.",
+  "created_at": "2026-10-21T07:30:00Z",
+  "environment": {
+    "language": "python",
+    "os": "linux",
+    "runtime": "python 3.10.12"
+  },
+  "install": {
+    "attempts_to_first_success": 1,
+    "docs_sufficient": true,
+    "errors": [],
+    "first_use_ok": true,
+    "install_cmd": "python3 -m pip install \"jsonschema>=4.17\"",
+    "install_exit_code": 0,
+    "install_ok": true,
+    "minutes_to_first_success": 2,
+    "reason": "Draft202012Validator.iter_errors validated a schema with if/then, $ref and $defs on the first run; error paths were precise enough to show submitters.",
+    "tests": {
+      "cmd": "python3 -m unittest discover -s tests",
+      "duration_ms": 360,
+      "passed": true,
+      "ran": true
+    },
+    "verdict": "keep",
+    "workarounds": []
+  },
+  "intake": {
+    "accepted_at": "2026-10-21T07:28:14Z",
+    "flags": [],
+    "issue": 1,
+    "submitter": "mikeflame",
+    "submitter_created_at": "2019-07-30T17:48:15Z",
+    "weight": 1.0
+  },
+  "kind": "install",
+  "notes": "A first pip attempt with --user was refused inside a virtualenv; that is the environment, not the package. The plain install succeeded.",
+  "project": {
+    "repo": "mikeflame/airate",
+    "size": "small",
+    "visibility": "public"
+  },
+  "protocol": 1,
+  "subject": {
+    "package": "pypi:jsonschema",
+    "repo": "python-jsonschema/jsonschema",
+    "type": "library",
+    "version": "4.26.0"
+  }
+}
