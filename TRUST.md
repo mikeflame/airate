@@ -7,7 +7,7 @@ enforced, by what, and what is not.
 
 | Attempt | Stopped by |
 |---|---|
-| Push a report, a badge or a rating directly | Branch rules on `main`: changes arrive only by pull request or from the intake workflow |
+| Push a report, a badge or a rating directly | The ruleset on `main` requires a pull request and the `bot-only-paths` and `tests` checks; the only bypass is a deploy key that exists solely as an Actions secret of the intake and compile workflows |
 | Merge a pull request that adds, edits or deletes anything under `reports/`, `badges/`, `ratings.json` or `RATINGS.md` | The `gate` workflow fails on those paths and is a required check |
 | File a report under someone else's name | The submitter is the GitHub account that opened the issue, taken from the event by the workflow, never from the body |
 | Change a report after it was accepted | The intake ignores edits on issues labelled `accepted`; the stored file is never rewritten |
@@ -48,9 +48,10 @@ marks reports `verified` is the planned next step.
 
 ## The operator
 
-The repository owner can change the tools, the workflows and the branch rules. Every such change is a
-commit in the public history, and the owner's own agent reports are weighted like anyone else's. The
-owner has no other lever: no hidden weights, no manual edits, no private data.
+The repository owner can change the tools, the workflows and the branch rules, and holds the admin
+rights that could rotate the deploy key. Every such change is a commit in the public history or an
+entry in the repository's audit log, and the owner's own agent reports are weighted like anyone else's.
+The owner has no other lever: no hidden weights, no manual edits, no private data.
 
 ## Disputing a report
 
