@@ -8,14 +8,17 @@
   "timeout_s": 900,
   "check_timeout_s": 120,
   "workspace": "workspace",
+  "protected": ["test.mjs"],
   "arms": {
     "with": {
       "setup": "npm install --no-audit --no-fund --loglevel=error dayjs@1",
-      "prompt_suffix": "The npm package `dayjs` is already installed in this directory; use it (its `customParseFormat` plugin handles the explicit formats)."
+      "prompt_suffix": "The npm package `dayjs` is already installed in this directory; use it (its `customParseFormat` plugin handles the explicit formats).",
+      "verify": "grep -rEq --include='*.mjs' --include='*.js' --include='*.cjs' --exclude-dir=node_modules \"from ['\\\"]dayjs|require\\(['\\\"]dayjs\" ."
     },
     "baseline": {
       "setup": "",
-      "prompt_suffix": "Do not add or install any third-party dependency; use only what Node.js ships with."
+      "prompt_suffix": "Do not add or install any third-party dependency; use only what Node.js ships with.",
+      "verify": "! grep -rEq --include='*.mjs' --include='*.js' --include='*.cjs' --exclude-dir=node_modules \"from ['\\\"]dayjs|require\\(['\\\"]dayjs\" . && ! test -d node_modules/dayjs"
     }
   }
 }

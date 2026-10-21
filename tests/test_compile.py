@@ -5,6 +5,7 @@ import unittest
 
 from helpers import fixture, make_root, store
 import compile as compiler
+import scoring
 
 
 class CompileTests(unittest.TestCase):
@@ -31,15 +32,16 @@ class CompileTests(unittest.TestCase):
         self.assertEqual(repos, ["iamkun/dayjs", "tj/commander.js"])  # weight-0-only subjects are not listed
         top, second = ratings["subjects"]
         self.assertEqual((top["rank"], top["reports"], top["submitters"]), (1, 3, 3))
-        self.assertEqual(top["rate"], round(100 * 0.6466), msg="three perfect reports → Wilson lower bound ≈ 0.65")
-        self.assertEqual(second["rate"], 38)
+        self.assertEqual(top["rate"], 26, msg="three first-try installs: 0.4 × Wilson(1, 3)")
+        self.assertEqual(second["rate"], 5)
         self.assertEqual(top["components"]["bench"], None)
+        self.assertEqual(top["components"]["retained"], None, "install verdicts are not retention")
         changed = compiler.write_all(self.root, ratings)
         self.assertTrue((self.root / "badges" / "iamkun" / "dayjs.json").exists())
         badge = json.loads((self.root / "badges" / "iamkun" / "dayjs.json").read_text())
-        self.assertEqual(badge, {"schemaVersion": 1, "label": "AI Rate", "message": str(top["rate"]), "color": "green"})
+        self.assertEqual(badge, {"schemaVersion": 1, "label": "AI Rate", "message": str(top["rate"]), "color": "orange"})
         md = (self.root / "RATINGS.md").read_text()
-        self.assertIn("| 1 | [iamkun/dayjs](https://github.com/iamkun/dayjs) | library | **65** | 100% (n=3) | 100% (n=3) | – | 3 | 3 | claude-code |", md)
+        self.assertIn("| 1 | [iamkun/dayjs](https://github.com/iamkun/dayjs) | library | **26** | 100% (n=3) | 100% (n=3) | – | – | 3 | 3 | claude-code |", md)
         readme = (self.root / "README.md").read_text()
         self.assertIn("<!-- ratings:start -->\n| # | Repository | AI Rate |", readme)
         self.assertNotIn("old", readme)
@@ -54,9 +56,10 @@ class CompileTests(unittest.TestCase):
         store(self.root, fixture("bench.json"), issue=3, submitter="b")
         s = compiler.compile_ratings(self.root)["subjects"][0]
         self.assertEqual(s["kinds"], {"install": 1, "weekly": 1, "bench": 1})
-        self.assertEqual(s["components"]["keep"]["n"], 2)
+        self.assertEqual(s["components"]["retained"], {"p": 1.0, "n": 1, "lower": round(scoring.wilson_lower(1, 1), 4)})
         self.assertAlmostEqual(s["components"]["bench"]["ratio"], 5.08, places=2)
-        self.assertGreater(s["rate"], 38)
+        self.assertEqual(s["components"]["bench"]["p"], 1.0)
+        self.assertGreater(s["rate"], 5)
 
     def test_removed_subject_lowers_keep(self):
         store(self.root, fixture("install.json"), issue=1, submitter="a")
@@ -64,7 +67,24 @@ class CompileTests(unittest.TestCase):
         wk["weekly"].update({"status": "removed", "verdict": "replace"})
         store(self.root, wk, issue=2, submitter="a")
         s = compiler.compile_ratings(self.root)["subjects"][0]
-        self.assertEqual(s["components"]["keep"]["p"], 0.5)
+        self.assertEqual(s["components"]["retained"]["p"], 0.0)
+
+    def test_second_attempt_is_not_first_try(self):
+        r = fixture("install.json")
+        r["install"]["attempts_to_first_success"] = 2
+        store(self.root, r, issue=1, submitter="a")
+        c = compiler.compile_ratings(self.root)["subjects"][0]["components"]
+        self.assertEqual((c["works"]["p"], c["first_try"]["p"]), (1.0, 0.0))
+
+    def test_revoked_subject_badge_resets(self):
+        p1 = store(self.root, fixture("install.json"), issue=1, submitter="a")
+        compiler.write_all(self.root, compiler.compile_ratings(self.root))
+        badge = self.root / "badges" / "iamkun" / "dayjs.json"
+        self.assertIn('"message": "5"', badge.read_text())
+        (self.root / "revocations.json").write_text(json.dumps([{"report": p1.relative_to(self.root).as_posix(), "reason": "test", "by": "x", "date": "2026-10-21"}]))
+        compiler.write_all(self.root, compiler.compile_ratings(self.root))
+        self.assertIn('"message": "unrated"', badge.read_text())
+        self.assertEqual(compiler.main(["--root", str(self.root), "--check"]), 0)
 
     def test_revocation_excludes_report(self):
         p1 = store(self.root, fixture("install.json"), issue=1, submitter="a")

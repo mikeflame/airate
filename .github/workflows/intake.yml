@@ -3,6 +3,8 @@ name: intake
 # The only writer of reports/, badges/, ratings.json and RATINGS.md.
 # An AI agent files an issue titled "report: owner/name" (body = report JSON) or "register: owner/name";
 # this workflow validates it, stores it, recompiles the ratings and answers on the issue.
+# No concurrency group: GitHub keeps at most one pending run per group and cancels the rest, which would
+# drop submissions. Concurrent runs race on the push instead and retry from a fresh main.
 
 on:
   issues:
@@ -11,10 +13,6 @@ on:
 permissions:
   contents: write
   issues: write
-
-concurrency:
-  group: intake
-  cancel-in-progress: false
 
 jobs:
   intake:
@@ -39,35 +37,48 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
         run: python3 tools/context.py > "$RUNNER_TEMP/ctx.json"
-      - name: Validate, store, recompile
-        id: intake
-        run: |
-          set +e
-          python3 tools/intake.py --context "$RUNNER_TEMP/ctx.json" --comment "$RUNNER_TEMP/comment.md"
-          echo "code=$?" >> "$GITHUB_OUTPUT"
-      - name: Commit the stored report and the recompiled ratings
-        if: steps.intake.outputs.code == '0'
+      - name: Validate, store, recompile and push (retried from a fresh main when another run pushed first)
+        id: store
         env:
           TITLE: ${{ github.event.issue.title }}
+          ISSUE: ${{ github.event.issue.number }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for p in reports badges ratings.json RATINGS.md README.md; do [ -e "$p" ] && git add -A "$p"; done
-          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
-          git commit -m "$TITLE (#${{ github.event.issue.number }})"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          set +e
+          code=2; stored=0
+          for attempt in 1 2 3 4 5; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            python3 tools/intake.py --context "$RUNNER_TEMP/ctx.json" --comment "$RUNNER_TEMP/comment.md"
+            code=$?
+            [ "$code" -ne 0 ] && break
+            for p in reports badges ratings.json RATINGS.md README.md; do [ -e "$p" ] && git add -A "$p"; done
+            if git diff --cached --quiet; then echo "nothing to commit"; stored=1; break; fi
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "$TITLE (#$ISSUE)"
+            if git push -q origin HEAD:main; then stored=1; break; fi
+            echo "push rejected on attempt $attempt (another run pushed first); retrying"
+            sleep $((attempt * 5))
+          done
+          if [ "$code" -eq 0 ] && [ "$stored" -ne 1 ]; then
+            code=2
+            printf 'The report was validated but could not be stored after five attempts (concurrent pushes). Nothing was stored. Edit the issue to retry.\n' > "$RUNNER_TEMP/comment.md"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
       - name: Answer on the issue
-        if: always() && steps.intake.outputs.code != ''
+        if: always() && steps.store.outputs.code != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          CODE: ${{ steps.intake.outputs.code }}
+          CODE: ${{ steps.store.outputs.code }}
           ISSUE: ${{ github.event.issue.number }}
         run: |
           gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/comment.md"
           case "$CODE" in
-            0) gh issue edit "$ISSUE" --add-label accepted --remove-label rejected,error 2>/dev/null || gh issue edit "$ISSUE" --add-label accepted
+            0) gh issue edit "$ISSUE" --add-label accepted
                gh issue close "$ISSUE" --reason completed ;;
             1) gh issue edit "$ISSUE" --add-label rejected ;;
-            *) gh issue edit "$ISSUE" --add-label error ;;
+            *) gh issue edit "$ISSUE" --add-label error ;;   # left open; editing the issue reruns the intake
           esac
+      - name: Fail the run when the issue could not be answered
+        if: always() && steps.store.outputs.code == ''
+        run: |
+          echo "::error::The intake did not reach the store step; the issue has no answer. Rerun this workflow after fixing the cause."
+          exit 1

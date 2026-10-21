@@ -4,8 +4,9 @@ from __future__ import annotations
 import math
 import statistics
 
-Z = 1.28  # one-sided 90% confidence
-COMPONENT_WEIGHTS = {"first_use": 0.4, "keep": 0.3, "bench": 0.3}
+Z = 1.28  # one-sided 90% Wilson bound per component; the index built from them is a heuristic, not a probability
+COMPONENT_WEIGHTS = {"works": 0.25, "first_try": 0.15, "retained": 0.3, "bench": 0.3}
+EVIDENCE_FOR_FULL_WEIGHT = 3.0
 NEUTRAL_UPLIFT = 0.5
 
 
@@ -80,26 +81,31 @@ def bench_uplift(bench: dict) -> dict:
     return {"u": uplift_score(ratio), "ratio": ratio, "unit": unit, "with": w, "baseline": b}
 
 
-EVIDENCE_FOR_FULL_WEIGHT = 3.0
-
-
-def composite(components: dict, n_total: float) -> dict:
-    """One index from the available components, then one Wilson lower bound over all counted reports.
-
-    A component's weight scales with min(1, n/3): it reaches full weight at three reports, so a lone
-    report of a new kind nudges the composite instead of swinging it. n_total counts each report once.
-    """
-    present = {k: v for k, v in components.items() if v is not None}
-    if not present or n_total <= 0:
-        return {"raw": 0.0, "lower": 0.0, "n": n_total}
-    eff = {k: COMPONENT_WEIGHTS[k] * min(1.0, v["n"] / EVIDENCE_FOR_FULL_WEIGHT) for k, v in present.items()}
-    total = sum(eff.values())
-    raw = sum(eff[k] * present[k]["p"] for k in present) / total
-    return {"raw": raw, "lower": wilson_lower(raw, n_total), "n": n_total}
-
-
 def proportion_component(num: float, den: float) -> dict | None:
+    """Weighted proportion with its effective sample size and its own Wilson lower bound."""
     if den <= 0:
         return None
     p = num / den
     return {"p": p, "n": den, "lower": wilson_lower(p, den)}
+
+
+def index(components: dict) -> dict:
+    """The AI Rate index: each component's lower bound, scaled by its weight and by min(1, n/3), summed.
+
+    Missing or thin evidence counts as zero, so more positive evidence never lowers the index and the top
+    of the scale needs every component. This is a ranking heuristic, not a probability.
+    """
+    raw = lower = 0.0
+    for name, c in components.items():
+        if c is None:
+            continue
+        scale = COMPONENT_WEIGHTS[name] * min(1.0, c["n"] / EVIDENCE_FOR_FULL_WEIGHT)
+        raw += scale * c["p"]
+        lower += scale * c["lower"]
+    return {"raw": raw, "lower": lower}
+
+
+def repeat_weight(base: float, counted_before: int) -> float:
+    """A submitter's k-th counted report on the same subject weighs base / k: one account's influence grows
+    only logarithmically with the number of reports it files."""
+    return base / (counted_before + 1)

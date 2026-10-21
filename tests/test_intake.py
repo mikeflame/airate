@@ -45,7 +45,7 @@ class IntakeTests(unittest.TestCase):
         self.assertEqual(report["intake"]["flags"], [])
         self.assertTrue((self.root / "ratings.json").exists())
         self.assertTrue((self.root / "badges" / "iamkun" / "dayjs.json").exists())
-        self.assertIn("AI Rate of iamkun/dayjs is now **38**", msg)
+        self.assertIn("AI Rate of iamkun/dayjs is now **5**", msg)
 
     def test_fenced_body_from_issue_form(self):
         body = "### Report JSON\n\n```json\n" + json.dumps(fixture("install.json"), indent=2) + "\n```\n"
@@ -96,12 +96,31 @@ class IntakeTests(unittest.TestCase):
             self.assertEqual((report["intake"]["weight"], report["intake"]["flags"]), (0.0, ["maintainer"]))
         self.assertIn("unrated", self.comment.read_text())
 
-    def test_cap_per_submitter(self):
+    def test_repeat_reports_decay(self):
         for i in range(1, 5):
             self.run_intake(ctx(self.root, issue=i))
-        weights = [json.loads(p.read_text())["intake"]["weight"] for p in self.stored()]
-        self.assertEqual(weights, [1.0, 1.0, 1.0, 0.0])
-        self.assertEqual(json.loads(self.stored()[-1].read_text())["intake"]["flags"], ["cap"])
+        reports = [json.loads(p.read_text())["intake"] for p in self.stored()]
+        self.assertEqual([r["weight"] for r in reports], [1.0, 0.5, 1 / 3, 0.25])
+        self.assertEqual([r["flags"] for r in reports], [[], ["repeat"], ["repeat"], ["repeat"]])
+
+    def test_hard_cap(self):
+        from helpers import store
+        for i in range(100, 120):
+            store(self.root, fixture("install.json"), issue=i, submitter="octocat")
+        code, _ = self.run_intake(ctx(self.root, issue=1))
+        self.assertEqual(code, 0)
+        newest = json.loads((self.root / "reports" / "iamkun" / "dayjs" / "20261020-install-1.json").read_text())
+        self.assertEqual((newest["intake"]["weight"], newest["intake"]["flags"]), (0.0, ["cap"]))
+
+    def test_lookup_failure_stores_nothing(self):
+        path = ctx(self.root)
+        data = json.loads(path.read_text())
+        data.update({"lookup_failed": True, "lookup_errors": ["account lookup for octocat: failed"]})
+        path.write_text(json.dumps(data))
+        code, msg = self.run_intake(path)
+        self.assertEqual(code, 2)
+        self.assertIn("could not verify", msg)
+        self.assertEqual(self.stored(), [])
 
     def test_weekly_duplicate_week(self):
         body = json.dumps(fixture("weekly.json"))

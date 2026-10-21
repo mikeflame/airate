@@ -3,7 +3,13 @@
 Everything here is implemented in [tools/scoring.py](tools/scoring.py) and [tools/compile.py](tools/compile.py);
 `tests/test_scoring.py` pins the numbers below. Change the formula and this file together.
 
-## Weights
+**AI Rate is an evidence-weighted index on a 0–100 scale. It is a ranking heuristic, not a probability
+and not a confidence interval.** Each column of the table is a measured proportion with its own
+uncertainty; the index adds them up with fixed weights and counts missing or thin evidence as zero.
+The observations in `reports/` and the per-column numbers in `ratings.json` are the data; the index
+is one way to order them.
+
+## Weights of a report
 
 Each stored report carries a weight set by the intake, from facts the submitter cannot forge:
 
@@ -12,86 +18,71 @@ Each stored report carries a weight set by the intake, from facts the submitter 
 | ordinary report | 1 | |
 | submitter's GitHub account is younger than 30 days | × 0.25 | `new_account` |
 | submitter is the subject's owner or on its contributor list | 0 | `maintainer` |
-| submitter's fourth or later report of the same kind on the same subject | 0 | `cap` |
+| submitter's k-th counted report on the same subject, any kind | ÷ k | `repeat` |
+| submitter's 21st or later report on the same subject | 0 | `cap` |
 | second weekly check-in by the same submitter for the same week | 0 | `duplicate_week` |
 | bench report naming a task from `tasks/` whose content hash does not match | 0 | `task_mismatch` |
 | report listed in `revocations.json` | 0 | shown under *Revoked* |
 
-Weight-0 reports stay on file and in the `ratings.json` counts but contribute nothing to the score. A
-subject with only weight-0 reports is not listed.
+The `÷ k` rule means one account's total influence on a subject grows only logarithmically: nine
+perfect reports from one account (three installs, three bench runs, three weekly check-ins) produce an
+index of **15**. Weight-0 reports stay on file and in the `ratings.json` counts but contribute
+nothing. A subject with only weight-0 reports is not listed, and its badge reads *unrated*.
 
-## Components
+## Columns
 
-Each component is a weighted proportion `p = Σ w·x / Σ w` with an effective sample size `n = Σ w`.
-
-- **Works first time** (install reports): `x = 1` when `first_use_ok` is true.
-- **Keeps working** (install and weekly reports): `x = 1` for an install verdict of `keep`, and for a
-  weekly check-in with status `still_used` and a verdict other than `replace`.
-- **Bench uplift** (bench reports): for each report, cost per solved task is the median trial cost of an
-  arm divided by its solve rate (USD when every trial reports it, else total tokens, else wall-clock
-  milliseconds; the same unit for both arms). With `r = baseline ÷ with`, the report's
-  `x = clamp(0.5 + ½·log₂ r, 0, 1)`: halving the cost per solve is full marks, no change is `0.5`,
-  doubling the cost is zero; `1` when the task is unsolvable without the subject, `0` when it is
-  unsolvable with it.
-
-## Composite
-
-```
-ω = 0.4 works first time, 0.3 keeps working, 0.3 bench uplift
-ω'ₖ = ωₖ · min(1, nₖ / 3)                      a component reaches full weight at three reports
-p   = Σ ω'ₖ·pₖ / Σ ω'ₖ                         over the components that have reports
-n   = total weight of the counted reports        each report counted once
-AI Rate = round( 100 · lower(p, n) )
-```
-
-`lower` is the lower bound of the Wilson score interval at z = 1.28 (one-sided 90%):
+Each column is a weighted proportion `p = Σ w·x / Σ w` with effective sample size `n = Σ w` and its own
+Wilson lower bound at z = 1.28 (one-sided 90%):
 
 ```
 lower(p, n) = ( p + z²/2n − z·√( p(1−p)/n + z²/4n² ) ) / ( 1 + z²/n )
 ```
 
-Components without reports are left out, so a repository with only install and weekly reports is scored
-on those two, and the bench component joins when the first bench report arrives, at a third of its
-weight until there are three. `ratings.json` also carries the point estimate (`raw`) and each component's
-`p`, `n` and its own `lower`, so anyone can rank by a different rule.
+| Column | Reports | x = 1 when |
+|---|---|---|
+| **Works** | install | `first_use_ok`: the package did its job within the session, however many attempts it took |
+| **First attempt** | install | `first_use_ok` and `attempts_to_first_success` is 1 |
+| **Retained** | weekly | status `still_used` and verdict not `replace`; the install verdict does not count |
+| **Bench uplift** | bench | see below; `x` is graded, not binary |
+
+Bench: cost per solved task is an arm's median trial cost divided by its solve rate (USD when every
+trial reports it, else total tokens, else wall-clock milliseconds; the same unit for both arms). With
+`r = baseline ÷ with`, `x = clamp(0.5 + ½·log₂ r, 0, 1)`: halving the cost per solve is full marks, no
+change is 0.5, doubling the cost is zero; `1` when the task is unsolvable without the subject, `0` when
+it is unsolvable with it.
+
+## The index
+
+```
+ω = 0.25 works, 0.15 first attempt, 0.30 retained, 0.30 bench uplift
+AI Rate = round( 100 · Σ ωₖ · min(1, nₖ / 3) · lower(pₖ, nₖ) )
+```
+
+Three properties follow:
+
+- **Every column keeps its own uncertainty.** Three installs plus a hundred weekly check-ins give
+  **55**: retention evidence cannot stand in for installation evidence, and the *Works* column
+  still says n = 3.
+- **More positive evidence never lowers the index.** A column with no reports contributes zero; a
+  column with one report contributes a third of its weight; from three reports it contributes in full.
+- **The top needs everything.** Install reports alone reach at most 40; retention lifts the ceiling to
+  70; only benchmarks reach 100.
+
+| Evidence, all positive | AI Rate |
+|---|--:|
+| 1 install (first try) | 5 |
+| 3 installs | 26 |
+| 10 installs | 34 |
+| 10 installs + 10 weekly check-ins | 60 |
+| 10 installs + 10 weeklies + 3 bench runs (≥ 2× cheaper) | 80 |
+| 10 + 10 + 10 | 86 |
+| 30 + 30 + 30 | 95 |
+
+A mixed subject (10 installs: 80% worked, 60% on the first attempt; 8 weekly check-ins at 90% retained;
+2 bench runs averaging x = 0.75) scores **48**. `ratings.json` carries every column's `p`, `n` and
+`lower` plus the point-estimate index (`raw`), so anyone can rank by a different rule.
 
 Rank order: AI Rate descending, then counted reports descending, then repository name.
-
-## Why the lower bound
-
-With `p = 1` (every report positive) the rate grows with the number of independent reports:
-
-| Reports, all positive | AI Rate |
-|--:|--:|
-| 1 | 38 |
-| 2 | 55 |
-| 3 | 65 |
-| 5 | 75 |
-| 10 | 86 |
-| 30 | 95 |
-| 100 | 98 |
-
-One report can never score above 38; ten agreeing reports score 86. A repository earns its rate from
-independent confirmations, not from one enthusiastic session, and a lone report, honest or not, cannot
-top the list.
-
-## Worked example
-
-Ten install reports (8 worked first time, 7 with verdict `keep`) and four weekly check-ins (all
-`still_used`, none `replace`), all at weight 1:
-
-| Component | p | n |
-|---|--:|--:|
-| works first time | 0.80 | 10 |
-| keeps working | 0.786 | 14 |
-
-p = (0.4·0.80 + 0.3·0.786) / 0.7 = 0.794, n = 14 → lower 0.629 → **AI Rate 63**.
-
-Add one bench report (weight ω' = 0.3·⅓ = 0.1 until there are three). With a task that costs at least
-twice as much without the subject (x = 1): p = (0.4·0.80 + 0.3·0.786 + 0.1·1.0) / 0.8 = 0.820, n = 15 →
-**AI Rate 66**. Had the bench found no difference (x = 0.5) → **59**. A measured uplift adds
-evidence and lifts the index; a measured non-result lowers it; both start at a third of their eventual
-weight.
 
 ## Badge colours
 

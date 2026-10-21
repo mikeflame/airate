@@ -16,6 +16,8 @@ prompt = pathlib.Path(sys.argv[1]).read_text()
 cwd = pathlib.Path(sys.argv[2])
 if "FAIL" not in prompt:
     (cwd / "done.txt").write_text("ok")
+if "TAMPER" in prompt:
+    (cwd / "seed.txt").write_text("the grader is now whatever I want")
 print("some agent chatter")
 print(json.dumps({"input_tokens": 100, "output_tokens": 50, "cost_usd": 0.01, "duration_ms": 5, "turns": 2, "model": "fake-1"}))
 '''
@@ -50,12 +52,13 @@ class HarnessTests(unittest.TestCase):
         self.task = self.dir / "task"
         (self.task / "workspace").mkdir(parents=True)
         (self.task / "workspace" / "seed.txt").write_text("seed")
-        (self.task / "task.json").write_text(json.dumps({
-            "id": "fake-task", "prompt": "Create done.txt", "check": "test -f done.txt && test -f seed.txt",
-            "timeout_s": 30,
-            "arms": {"with": {"setup": "echo setup > setup.txt", "prompt_suffix": "use the subject"},
-                     "baseline": {"setup": "", "prompt_suffix": "FAIL without it"}},
-        }))
+        self.spec = {
+            "id": "fake-task", "prompt": "Create done.txt", "check": "test -f done.txt && grep -q seed seed.txt",
+            "timeout_s": 30, "protected": ["seed.txt"],
+            "arms": {"with": {"setup": "echo setup > setup.txt", "prompt_suffix": "use the subject", "verify": "test -f setup.txt"},
+                     "baseline": {"setup": "", "prompt_suffix": "FAIL without it", "verify": "! test -f setup.txt"}},
+        }
+        (self.task / "task.json").write_text(json.dumps(self.spec))
         agent = self.dir / "agent.py"
         agent.write_text(FAKE_AGENT)
         agent.chmod(0o755)
@@ -79,11 +82,37 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual([t["success"] for t in with_trials], [True, True])
         self.assertEqual([t["success"] for t in base_trials], [False, False])
         self.assertEqual(with_trials[0]["cost_usd"], 0.01)
+        self.assertEqual((with_trials[0]["grader_intact"], with_trials[0]["arm_ok"]), (True, True))
         self.assertEqual(report["bench"]["task"]["sha256"], run.sha256_dir(self.task))
         run_dir = report_path.parent
         self.assertTrue((run_dir / "with" / "1" / "setup.log").read_text().startswith("$ echo setup"))
         self.assertTrue((run_dir / "with" / "1" / "workspace" / "setup.txt").exists())
         self.assertIn("[exit 1]", (run_dir / "baseline" / "1" / "check.log").read_text())
+
+    def test_agent_that_edits_the_grader_fails(self):
+        self.spec["arms"]["with"]["prompt_suffix"] = "TAMPER with the tests"
+        (self.task / "task.json").write_text(json.dumps(self.spec))
+        out = self.dir / "runs"
+        run.main(["--task", str(self.task), "--subject", "acme/thing", "--agent", "custom",
+                  "--agent-cmd", f"python3 {self.agent} {{prompt_file}} {{cwd}}", "--trials", "1", "--arms", "with",
+                  "--task-source", "custom", "--out", str(out)])
+        trial = json.loads(next(out.rglob("trial.json")).read_text())
+        self.assertEqual(trial["check_rc"], 0, "the check ran against the restored grader")
+        self.assertFalse(trial["grader_intact"])
+        self.assertFalse(trial["success"])
+        self.assertEqual((next(out.rglob("workspace")) / "seed.txt").read_text(), "seed", "protected file restored")
+
+    def test_arm_condition_is_verified(self):
+        self.spec["arms"]["with"]["verify"] = "test -f the-subject-was-not-used"
+        (self.task / "task.json").write_text(json.dumps(self.spec))
+        out = self.dir / "runs"
+        run.main(["--task", str(self.task), "--subject", "acme/thing", "--agent", "custom",
+                  "--agent-cmd", f"python3 {self.agent} {{prompt_file}} {{cwd}}", "--trials", "1", "--arms", "with",
+                  "--task-source", "custom", "--out", str(out)])
+        trial = json.loads(next(out.rglob("trial.json")).read_text())
+        self.assertEqual(trial["check_rc"], 0)
+        self.assertFalse(trial["arm_ok"])
+        self.assertFalse(trial["success"])
 
     def test_agent_failure_is_recorded_not_fatal(self):
         out = self.dir / "runs"
