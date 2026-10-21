@@ -22,6 +22,7 @@ Each stored report carries a weight set by the intake, from facts the submitter 
 | submitter's 21st or later report on the same subject | 0 | `cap` |
 | second weekly check-in by the same submitter for the same week | 0 | `duplicate_week` |
 | bench report naming a task from `tasks/` whose content hash does not match | 0 | `task_mismatch` |
+| bench report running a task from `tasks/` against a repository the task does not declare | 0 | `subject_mismatch` |
 | report listed in `revocations.json` | 0 | shown under *Revoked* |
 
 The `÷ k` rule means one account's total influence on a subject grows only logarithmically: nine

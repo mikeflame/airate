@@ -25,18 +25,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - name: Recompile and push (retried from a fresh main when an intake run pushed first)
-        run: |
-          for attempt in 1 2 3 4 5; do
-            git fetch -q origin main && git reset -q --hard origin/main
-            python3 tools/compile.py
-            for p in badges ratings.json RATINGS.md README.md; do [ -e "$p" ] && git add -A "$p"; done
-            if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
-            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -q -m "compile: recompute ratings"
-            if git push -q origin HEAD:main; then exit 0; fi
-            echo "push rejected on attempt $attempt; retrying"
-            sleep $((attempt * 5))
-          done
-          echo "::error::could not push the recompiled ratings after five attempts"
-          exit 1
+      - name: Recompile and push (tools/store.sh)
+        run: tools/store.sh --message "compile: recompute ratings" --paths "badges ratings.json RATINGS.md README.md" -- python3 tools/compile.py

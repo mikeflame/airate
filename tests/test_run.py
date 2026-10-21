@@ -125,24 +125,64 @@ class HarnessTests(unittest.TestCase):
         self.assertFalse(trial["success"])
 
 
+class SubjectMembershipTests(unittest.TestCase):
+    def test_task_refuses_an_undeclared_subject(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit) as ctx:
+                run.main(["--task", str(ROOT / "tasks" / "js-date-parse"), "--subject", "python-jsonschema/jsonschema",
+                          "--agent", "custom", "--agent-cmd", "true", "--out", tmp])
+            self.assertEqual(ctx.exception.code, 2)
+
+
 @unittest.skipUnless(shutil.which("node"), "node not installed")
 class DateTaskTests(unittest.TestCase):
-    """The shipped task must be solvable with Node alone and must fail on an empty workspace."""
+    """The shipped task must be solvable with Node alone, fail on an empty workspace, and its arm checks must
+    test necessity: text that merely mentions the subject does not pass the with arm."""
 
-    def run_check(self, with_solution: bool) -> int:
+    task = json.loads((ROOT / "tasks" / "js-date-parse" / "task.json").read_text())
+
+    def workspace(self, tmp, solution: str | None, fake_dayjs: bool = False) -> pathlib.Path:
+        ws = pathlib.Path(tmp) / "ws"
+        shutil.copytree(ROOT / "tasks" / "js-date-parse" / "workspace", ws)
+        if solution is not None:
+            (ws / "parse.mjs").write_text(solution)
+        if fake_dayjs:
+            pkg = ws / "node_modules" / "dayjs"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "dayjs", "version": "0.0.0-fake", "main": "index.js"}')
+            (pkg / "index.js").write_text("module.exports = {};\n")
+        return ws
+
+    def sh(self, cmd: str, ws: pathlib.Path) -> int:
+        return subprocess.run(["bash", "-c", cmd], cwd=ws, capture_output=True).returncode
+
+    def test_reference_solution_passes_and_empty_fails(self):
+        reference = (FIXTURES / "reference_parse.mjs").read_text()
         with tempfile.TemporaryDirectory() as tmp:
-            ws = pathlib.Path(tmp) / "ws"
-            shutil.copytree(ROOT / "tasks" / "js-date-parse" / "workspace", ws)
-            if with_solution:
-                shutil.copy(FIXTURES / "reference_parse.mjs", ws / "parse.mjs")
-            task = json.loads((ROOT / "tasks" / "js-date-parse" / "task.json").read_text())
-            return subprocess.run(["bash", "-c", task["check"]], cwd=ws, capture_output=True).returncode
+            self.assertEqual(self.sh(self.task["check"], self.workspace(tmp, reference)), 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotEqual(self.sh(self.task["check"], self.workspace(tmp, None)), 0)
 
-    def test_reference_solution_passes(self):
-        self.assertEqual(self.run_check(True), 0)
+    def test_baseline_verify_passes_a_dependency_free_solution(self):
+        reference = (FIXTURES / "reference_parse.mjs").read_text()
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.sh(self.task["arms"]["baseline"]["verify"], self.workspace(tmp, reference)), 0)
 
-    def test_empty_workspace_fails(self):
-        self.assertNotEqual(self.run_check(False), 0)
+    def test_with_verify_rejects_a_comment_that_only_mentions_the_subject(self):
+        reference = (FIXTURES / "reference_parse.mjs").read_text() + "\n// from 'dayjs'\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = self.workspace(tmp, reference, fake_dayjs=True)
+            self.assertEqual(self.sh(self.task["check"], ws), 0, "the tests pass")
+            self.assertNotEqual(self.sh(self.task["arms"]["with"]["verify"], ws), 0, "but the subject was not necessary")
+            self.assertTrue((ws / "node_modules" / "dayjs").is_dir(), "verify restores what it hid")
+
+    def test_with_verify_requires_the_subject_to_be_loaded(self):
+        reference = 'import "dayjs";\n' + (FIXTURES / "reference_parse.mjs").read_text()
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = self.workspace(tmp, reference, fake_dayjs=True)
+            self.assertEqual(self.sh(self.task["check"], ws), 0)
+            self.assertEqual(self.sh(self.task["arms"]["with"]["verify"], ws), 0, "tests fail once dayjs is hidden")
+            self.assertNotEqual(self.sh(self.task["arms"]["baseline"]["verify"], ws), 0, "and the baseline check fails for the same solution")
 
 
 if __name__ == "__main__":

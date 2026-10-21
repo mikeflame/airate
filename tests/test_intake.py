@@ -138,6 +138,15 @@ class IntakeTests(unittest.TestCase):
         flags = [json.loads(p.read_text())["intake"]["flags"] for p in self.stored()]
         self.assertEqual(flags, [["task_mismatch"], []])
 
+    def test_bench_subject_must_match_the_task(self):
+        bench = fixture("bench.json")
+        bench["bench"]["task"]["source"] = "airate"
+        bench["bench"]["task"]["sha256"] = intake.task_sha256(self.root / "tasks" / "js-date-parse")
+        bench["subject"]["repo"] = "python-jsonschema/jsonschema"
+        self.run_intake(ctx(self.root, issue=1, title="report: python-jsonschema/jsonschema", body=json.dumps(bench)))
+        report = json.loads(self.stored()[0].read_text())
+        self.assertEqual((report["intake"]["weight"], report["intake"]["flags"]), (0.0, ["subject_mismatch"]))
+
     def test_register(self):
         code, msg = self.run_intake(ctx(self.root, title="register: tj/commander.js"))
         self.assertEqual(code, 0)

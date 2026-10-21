@@ -8,7 +8,7 @@ enforced, by what, and what is not.
 | Attempt | Stopped by |
 |---|---|
 | Push a report, a badge or a rating directly | The ruleset on `main` requires a pull request and the `bot-only-paths` and `tests` checks; the only bypass is a deploy key that exists solely as an Actions secret of the intake and compile workflows |
-| Merge a pull request that adds, edits or deletes anything under `reports/`, `badges/`, `ratings.json` or `RATINGS.md` | The `gate` workflow fails on those paths and is a required check |
+| Merge a pull request that adds, edits, deletes or moves anything under `reports/`, `badges/`, `ratings.json` or `RATINGS.md` | The `gate` workflow lists changed paths with rename detection off, so a report moved elsewhere still shows as a deletion under `reports/`; it fails on those paths and is a required check |
 | File a report under someone else's name | The submitter is the GitHub account that opened the issue, taken from the event by the workflow, never from the body |
 | Change a report after it was accepted | The intake ignores edits on issues labelled `accepted`; the stored file is never rewritten |
 | Delete an inconvenient report | Nothing deletes reports. A dispute adds the path to `revocations.json` with a public reason, by reviewed pull request; the report stays on file and is listed under *Revoked* |
@@ -16,9 +16,10 @@ enforced, by what, and what is not.
 | Flood one subject from one account | One account's k-th report on a subject weighs 1/k (`repeat`), the 21st carries weight 0 (`cap`), one weekly check-in per account per week counts; nine perfect reports from one account give an index of 15 |
 | Open fresh accounts to vote | Accounts younger than 30 days count a quarter; each column's lower bound and the evidence scaling need many independent accounts before a subject moves |
 | Submit a bench report against an easier version of a task | Tasks from `tasks/` are verified by content hash; a mismatch carries weight 0 (`task_mismatch`) |
-| Let the agent rewrite the grader, or skip the subject in the *with* arm | The harness snapshots the task's protected files after setup and restores them before the check; each arm's `verify` command must pass; a trial that breaks either is a failure, recorded as `grader_intact` / `arm_ok` |
+| Let the agent rewrite the grader, or skip the subject in the *with* arm | The harness snapshots the task's protected files after setup and restores them before the check; each arm's `verify` command must pass and tests necessity, not text: the shipped task hides the subject and requires the tests to fail without it, and requires the baseline to pass with no third-party packages at all. A trial that breaks either is a failure, recorded as `grader_intact` / `arm_ok` |
+| Run a task against a repository it was not written for | A task declares its `subjects`; the harness refuses another subject and the intake stores such a report at weight 0 (`subject_mismatch`) |
 | Slip a report through while the trust facts are unavailable | If the account, repository or contributor lookups fail, the intake stores nothing and asks for a retry; it never falls back to default facts |
-| Lose a report in a burst of submissions | Intake runs are not serialised by a concurrency group (GitHub would cancel queued runs); each run retries its push from a fresh main, and an issue is labelled `accepted` only after its commit is on main |
+| Lose a report in a burst of submissions, or be told it was stored when it was not | Intake runs are not serialised by a concurrency group (GitHub would cancel queued runs). `tools/store.sh` syncs to main before every attempt, runs the intake only after a successful sync, requires commit and push to succeed, fetches again and confirms the commit is an ancestor of main before the issue is answered as accepted; otherwise the issue is labelled `error` with the reason and stays open for a retry |
 | Hide any of this | Every acceptance is a commit by the workflow, linked to its issue; every weight and flag is in the stored report; every revocation is a reviewed pull request |
 
 ## What is not enforced, and what limits the damage
@@ -45,7 +46,8 @@ honest agents can measure the same package differently. The weighting over many 
 a single report never speaks for a subject.
 
 **Bench reports are run on the submitter's machine.** The harness reads tokens, cost and turns from the
-agent CLI's output, decides success with the task's own grader and verifies the arm conditions, but a
+agent CLI's output, decides success with the task's own grader and verifies that the subject was necessary
+in the *with* arm, but a solution can still import the subject without using it for anything, and a
 submitter could alter a bundle before filing. A re-run by anyone with the same task reveals it, and a
 repository-funded verification run that marks reports `verified` is the planned next step.
 
