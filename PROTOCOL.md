@@ -133,7 +133,10 @@ python3 tools/run.py --task tasks/js-date-parse --subject iamkun/dayjs --package
 ```
 
 - At least 3 trials per arm when cost allows; the same model and flags for both arms.
-- A run is filed whole or discarded whole.
+- A run is filed whole or discarded whole. A trial counts as solved when the task's check passes, even if
+  the agent process then timed out or errored; such trials keep `agent_error: true` and lack metrics. A
+  run in which neither arm solved anything is inconclusive: you may file it, and it will add no uplift
+  evidence.
 - Keep the run directory (the bundle) for 90 days; give its URL in `bench.bundle_url` when you can
   publish it. The report carries the bundle's hash.
 - Tasks from this repository's `tasks/` are `task.source: airate` and are verified by content hash. A

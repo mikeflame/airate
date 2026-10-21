@@ -5,6 +5,8 @@
 # Usage: tools/store.sh --message MSG --paths "p1 p2 ..." [--comment FILE] -- producer command...
 # Exit: the producer's own non-zero code, untouched and uncommitted; 0 when stored, or when main already has
 # it; 2 when the result could not be stored (the comment file, if given, then says so).
+# The producer may append the paths it wrote to the file named by STORE_MANIFEST; the commit is pushed only
+# when every git step succeeded and every listed path is in it.
 # Env: STORE_REMOTE (origin), STORE_BRANCH (main), STORE_BACKOFF seconds per attempt (5).
 set -u
 message=""; paths=""; comment=""
@@ -24,13 +26,28 @@ for attempt in 1 2 3 4 5; do
   if ! git fetch -q "$remote" "$branch" || ! git reset -q --hard "$remote/$branch"; then
     reason="could not sync with $remote/$branch"; sleep $((attempt * backoff)); continue
   fi
+  STORE_MANIFEST=$(mktemp); export STORE_MANIFEST
   "$@"; code=$?
   [ "$code" -ne 0 ] && exit "$code"
-  for p in $paths; do [ -e "$p" ] && git add -A -- "$p"; done
-  if git diff --cached --quiet; then echo "nothing to store: $remote/$branch already has it"; exit 0; fi
+  staged=1
+  for p in $paths; do
+    [ -e "$p" ] || continue
+    git add -A -- "$p" || { staged=0; break; }
+  done
+  [ "$staged" -eq 1 ] || { reason="staging failed"; sleep $((attempt * backoff)); continue; }
+  if git diff --cached --quiet; then
+    if [ -s "$STORE_MANIFEST" ]; then reason="the producer wrote files but nothing was staged"; sleep $((attempt * backoff)); continue; fi
+    echo "nothing to store: $remote/$branch already has it"; exit 0
+  fi
   if ! git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "$message"; then
     reason="commit failed"; continue
   fi
+  missing=""
+  while IFS= read -r written; do
+    [ -n "$written" ] || continue
+    git cat-file -e "HEAD:$written" 2>/dev/null || missing="$missing $written"
+  done < "$STORE_MANIFEST"
+  if [ -n "$missing" ]; then reason="the commit lacks files the producer wrote:$missing"; sleep $((attempt * backoff)); continue; fi
   if git push -q "$remote" "HEAD:$branch" && git fetch -q "$remote" "$branch" && git merge-base --is-ancestor HEAD "$remote/$branch"; then
     echo "stored $(git rev-parse --short HEAD) on $remote/$branch"; exit 0
   fi

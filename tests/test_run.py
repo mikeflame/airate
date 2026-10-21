@@ -18,6 +18,8 @@ if "FAIL" not in prompt:
     (cwd / "done.txt").write_text("ok")
 if "TAMPER" in prompt:
     (cwd / "seed.txt").write_text("the grader is now whatever I want")
+if "CRASH" in prompt:
+    sys.exit(1)
 print("some agent chatter")
 print(json.dumps({"input_tokens": 100, "output_tokens": 50, "cost_usd": 0.01, "duration_ms": 5, "turns": 2, "model": "fake-1"}))
 '''
@@ -113,6 +115,30 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(trial["check_rc"], 0)
         self.assertFalse(trial["arm_ok"])
         self.assertFalse(trial["success"])
+
+    def test_agent_error_after_a_passing_solution_is_still_a_solve(self):
+        self.spec["arms"]["with"]["prompt_suffix"] = "then CRASH"
+        self.spec["arms"]["baseline"]["prompt_suffix"] = "FAIL without it"
+        (self.task / "task.json").write_text(json.dumps(self.spec))
+        out = self.dir / "runs"
+        code = run.main(["--task", str(self.task), "--subject", "acme/thing", "--agent", "custom",
+                         "--agent-cmd", f"python3 {self.agent} {{prompt_file}} {{cwd}}", "--trials", "1",
+                         "--task-source", "custom", "--out", str(out)])
+        self.assertEqual(code, 0, "the harness and the validator agree: the report is fileable")
+        report = json.loads(next(out.rglob("report.json")).read_text())
+        trial = report["bench"]["arms"]["with"]["trials"][0]
+        self.assertEqual((trial["success"], trial["agent_error"], trial["cost_usd"]), (True, True, None))
+        self.assertEqual(validate.validate_report(report), [])
+
+    def test_nothing_solved_is_inconclusive_but_fileable(self):
+        out = self.dir / "runs"
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = run.main(["--task", str(self.task), "--subject", "acme/thing", "--agent", "custom",
+                             "--agent-cmd", "false", "--trials", "1", "--task-source", "custom", "--out", str(out)])
+        self.assertEqual(code, 0)
+        self.assertIn("inconclusive", buf.getvalue())
 
     def test_agent_failure_is_recorded_not_fatal(self):
         out = self.dir / "runs"

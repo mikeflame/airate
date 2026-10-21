@@ -99,6 +99,41 @@ class IndexTests(unittest.TestCase):
         self.assertAlmostEqual(idx["lower"], 0.4 * scoring.wilson_lower(1, 3) + 0.3 * scoring.wilson_lower(1, 100))
 
 
+class CostPerSolveTests(unittest.TestCase):
+    def trials(self, costs, successes=None):
+        successes = successes or [True] * len(costs)
+        return [{"success": ok, "duration_ms": 1, "cost_usd": c} for c, ok in zip(costs, successes)]
+
+    def test_total_spend_per_solved_task(self):
+        a = scoring.arm_summary(self.trials([1, 1, 1000]), "usd")
+        b = scoring.arm_summary(self.trials([2, 2, 2]), "usd")
+        self.assertEqual((a["cost_per_solve"], b["cost_per_solve"]), (334.0, 2.0))
+        up = scoring.bench_uplift({"arms": {"with": {"trials": self.trials([1, 1, 1000])}, "baseline": {"trials": self.trials([2, 2, 2])}}})
+        self.assertLess(up["ratio"], 1.0, "the arm that spent 167x more per solve must not win")
+        self.assertEqual(up["u"], 0.0)
+
+    def test_failed_trials_still_cost(self):
+        a = scoring.arm_summary(self.trials([1, 1, 1], [True, False, False]), "usd")
+        self.assertEqual(a["cost_per_solve"], 3.0)
+
+    def test_no_solves_anywhere_is_inconclusive(self):
+        bench = {"arms": {"with": {"trials": self.trials([5], [False])}, "baseline": {"trials": self.trials([5], [False])}}}
+        self.assertTrue(scoring.is_inconclusive(bench))
+        up = scoring.bench_uplift(bench)
+        self.assertFalse(up["conclusive"])
+        self.assertEqual(up["u"], 0.5)
+        conclusive = {"arms": {"with": {"trials": self.trials([5], [True])}, "baseline": {"trials": self.trials([5], [False])}}}
+        self.assertFalse(scoring.is_inconclusive(conclusive))
+        self.assertEqual(scoring.bench_uplift(conclusive)["u"], 1.0)
+
+
+class TrustWeightTests(unittest.TestCase):
+    def test_trust_ignores_repeat_and_cap(self):
+        self.assertEqual(scoring.trust_weight({"flags": ["repeat", "cap"]}), 1.0)
+        self.assertEqual(scoring.trust_weight({"flags": ["new_account", "repeat"]}), 0.25)
+        self.assertEqual(scoring.trust_weight({"flags": ["maintainer"]}), 0.0)
+
+
 class RepeatWeightTests(unittest.TestCase):
     def test_harmonic(self):
         self.assertEqual([scoring.repeat_weight(1.0, k) for k in range(4)], [1.0, 0.5, 1 / 3, 0.25])

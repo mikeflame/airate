@@ -77,11 +77,6 @@ def semantic_errors(report: dict, stored: bool = False) -> list[str]:
             errors.append("weekly/replaced_by: required when status is replaced")
         if wk["status"] in ("removed", "replaced") and wk["verdict"] == "keep":
             errors.append("weekly/verdict: cannot be keep when the subject was removed or replaced")
-    if kind == "bench":
-        for arm_name, arm in report["bench"]["arms"].items():
-            for i, trial in enumerate(arm["trials"]):
-                if trial.get("agent_error") and trial["success"]:
-                    errors.append(f"bench/arms/{arm_name}/trials/{i}: agent_error and success cannot both be true")
     return errors
 
 

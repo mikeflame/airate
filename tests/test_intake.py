@@ -147,6 +147,17 @@ class IntakeTests(unittest.TestCase):
         report = json.loads(self.stored()[0].read_text())
         self.assertEqual((report["intake"]["weight"], report["intake"]["flags"]), (0.0, ["subject_mismatch"]))
 
+    def test_inconclusive_bench_is_flagged_but_kept(self):
+        dead = fixture("bench.json")
+        for arm in dead["bench"]["arms"].values():
+            for t in arm["trials"]:
+                t["success"] = False
+        code, msg = self.run_intake(ctx(self.root, issue=1, body=json.dumps(dead)))
+        self.assertEqual(code, 0)
+        report = json.loads(self.stored()[0].read_text())
+        self.assertEqual((report["intake"]["weight"], report["intake"]["flags"]), (1.0, ["inconclusive"]))
+        self.assertIn("unrated", msg, "it contributes to no column, so the subject has no rate yet")
+
     def test_register(self):
         code, msg = self.run_intake(ctx(self.root, title="register: tj/commander.js"))
         self.assertEqual(code, 0)

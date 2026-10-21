@@ -14,6 +14,10 @@ still passes, so the prompt and the task design carry the rest. `subjects` names
 task is written for: the harness refuses any other subject, and the intake gives weight 0 to a report
 that pairs the task with one.
 
+Success is the check's verdict alone: a trial whose agent crashed or timed out after writing a passing
+solution is a solved trial with missing metrics. Cost per solved task is the arm's total spend divided by
+its solved trials, so a task whose check is flaky or whose agent budget is too small punishes both arms.
+
 A bench report whose `task.source` is `airate` must reference a task from this directory by id and
 content hash; the intake recomputes the hash and gives weight 0 to a report whose task does not match.
 Changing a task changes its hash: reports filed under the old hash stay on file at the weight they got.

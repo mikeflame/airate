@@ -13,6 +13,11 @@ Usage:
 A custom agent command must print, as its last stdout line, a JSON object with any of: input_tokens,
 output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, duration_ms, turns, model, error (boolean).
 
+A trial succeeds when the task's check passes with the grader intact and the arm condition met, whatever
+happened to the agent process: an agent that timed out or hit its turn limit after writing a passing
+solution still solved the task. `agent_error` marks that the agent's own metrics are missing for that trial,
+and the comparison then falls back to a unit every trial has (tokens, else wall-clock time).
+
 A task's `protected` files (its grader) are snapshotted after the arm's setup and restored before the check;
 a trial whose agent changed them fails. Each arm's `verify` command must pass for the trial to count: the
 shipped task hides the subject and requires the tests to fail without it (with arm), and requires the tests
@@ -235,6 +240,9 @@ def main(argv: list[str]) -> int:
             model = model or seen_model
         arms[arm] = {"trials": trials}
     report = build_report(args, task, task_dir, arms, model, out)
+    if not any(t["success"] for arm in arms.values() for t in arm["trials"]):
+        print("inconclusive: no trial in either arm passed the check. The report is valid and may be filed, but it "
+              "compares nothing and adds no uplift evidence; check the agent command and the task before filing.")
     errors = validate.validate_report(report)
     report_path = out / "report.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

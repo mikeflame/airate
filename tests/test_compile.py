@@ -55,7 +55,7 @@ class CompileTests(unittest.TestCase):
         store(self.root, fixture("weekly.json"), issue=2, submitter="a")
         store(self.root, fixture("bench.json"), issue=3, submitter="b")
         s = compiler.compile_ratings(self.root)["subjects"][0]
-        self.assertEqual(s["kinds"], {"install": 1, "weekly": 1, "bench": 1})
+        self.assertEqual(s["kinds"], {"install": 1, "weekly": 1, "bench": 1, "bench_inconclusive": 0})
         self.assertEqual(s["components"]["retained"], {"p": 1.0, "n": 1, "lower": round(scoring.wilson_lower(1, 1), 4)})
         self.assertAlmostEqual(s["components"]["bench"]["ratio"], 5.08, places=2)
         self.assertEqual(s["components"]["bench"]["p"], 1.0)
@@ -68,6 +68,43 @@ class CompileTests(unittest.TestCase):
         store(self.root, wk, issue=2, submitter="a")
         s = compiler.compile_ratings(self.root)["subjects"][0]
         self.assertEqual(s["components"]["retained"]["p"], 0.0)
+
+    def test_inconclusive_benches_add_nothing(self):
+        for i in range(1, 4):
+            store(self.root, fixture("install.json"), issue=i, submitter=f"u{i}")
+        before = compiler.compile_ratings(self.root)["subjects"][0]["rate"]
+        dead = fixture("bench.json")
+        for arm in dead["bench"]["arms"].values():
+            for t in arm["trials"]:
+                t["success"] = False
+        for i in range(100, 200):
+            store(self.root, dead, issue=i, submitter=f"b{i}")
+        s = compiler.compile_ratings(self.root)["subjects"][0]
+        self.assertEqual(s["rate"], before, "a hundred benchmarks that solved nothing must not move the rate")
+        self.assertIsNone(s["components"]["bench"])
+        self.assertEqual(s["kinds"]["bench_inconclusive"], 100)
+
+    def test_retained_is_each_agents_latest_status(self):
+        store(self.root, fixture("install.json"), issue=1, submitter="a")
+        wk = fixture("weekly.json")
+        for i in range(2, 21):
+            wk["created_at"] = f"2026-10-{min(26 + (i - 2) // 10, 31):02d}T{i:02d}:00:00Z"
+            store(self.root, wk, issue=i, submitter="a", weight=1 / i, flags=["repeat"])
+        gone = fixture("weekly.json")
+        gone["created_at"] = "2026-11-30T09:00:00Z"
+        gone["weekly"].update({"status": "removed", "verdict": "replace"})
+        store(self.root, gone, issue=21, submitter="a", weight=0.0, flags=["cap"])
+        c = compiler.compile_ratings(self.root)["subjects"][0]["components"]
+        self.assertEqual((c["retained"]["p"], c["retained"]["n"]), (0.0, 1), "a's latest check-in says removed, whatever the cap")
+        store(self.root, fixture("weekly.json"), issue=30, submitter="b")
+        c = compiler.compile_ratings(self.root)["subjects"][0]["components"]
+        self.assertEqual((c["retained"]["p"], c["retained"]["n"]), (0.5, 2))
+        dup = fixture("weekly.json")
+        dup["created_at"] = "2026-12-01T00:00:00Z"
+        dup["weekly"].update({"status": "removed", "verdict": "replace"})
+        store(self.root, dup, issue=31, submitter="b", weight=0.0, flags=["duplicate_week"])
+        c = compiler.compile_ratings(self.root)["subjects"][0]["components"]
+        self.assertEqual(c["retained"]["p"], 0.5, "a duplicate-week report never speaks for an agent")
 
     def test_second_attempt_is_not_first_try(self):
         r = fixture("install.json")
