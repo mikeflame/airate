@@ -11,12 +11,13 @@
       "badge": "badges/python-jsonschema/jsonschema.json",
       "components": {
         "bench": null,
-        "first_use": {
+        "first_try": {
           "lower": 0.379,
           "n": 1.0,
           "p": 1.0
         },
-        "keep": {
+        "retained": null,
+        "works": {
           "lower": 0.379,
           "n": 1.0,
           "p": 1.0
@@ -28,13 +29,13 @@
         "weekly": 0
       },
       "last_report": "2026-10-21T07:30:00Z",
-      "lower": 0.379,
+      "lower": 0.0505,
       "models": [
         "claude-fable-5-1"
       ],
       "rank": 1,
-      "rate": 38,
-      "raw": 1.0,
+      "rate": 5,
+      "raw": 0.1333,
       "repo": "python-jsonschema/jsonschema",
       "reports": 1,
       "reports_total": 1,
@@ -53,12 +54,13 @@
           "p": 0.0609,
           "ratio": 0.54
         },
-        "first_use": {
-          "lower": 0.379,
+        "first_try": {
+          "lower": 0.0,
           "n": 1.0,
-          "p": 1.0
+          "p": 0.0
         },
-        "keep": {
+        "retained": null,
+        "works": {
           "lower": 0.379,
           "n": 1.0,
           "p": 1.0
@@ -70,14 +72,14 @@
         "weekly": 0
       },
       "last_report": "2026-10-21T07:29:39Z",
-      "lower": 0.3025,
+      "lower": 0.0318,
       "models": [
         "claude-fable-5-1",
         "claude-haiku-4-5-20251001"
       ],
       "rank": 2,
-      "rate": 30,
-      "raw": 0.7183,
+      "rate": 3,
+      "raw": 0.0894,
       "repo": "iamkun/dayjs",
       "reports": 2,
       "reports_total": 2,
