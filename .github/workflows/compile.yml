@@ -26,4 +26,5 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Recompile and push (tools/store.sh)
-        run: tools/store.sh --message "compile: recompute ratings" --paths "badges ratings.json RATINGS.md README.md" -- python3 tools/compile.py
+        run: |
+          tools/store.sh --message "compile: recompute ratings" --paths "badges ratings.json RATINGS.md README.md" -- python3 tools/compile.py

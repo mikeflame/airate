@@ -38,7 +38,7 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
         run: python3 tools/context.py > "$RUNNER_TEMP/ctx.json"
-      - name: Validate, store, recompile and push (tools/store.sh: every git step must succeed and the commit must be on main)
+      - name: "Validate, store, recompile and push (tools/store.sh requires every git step to succeed and the commit to be on main)"
         id: store
         env:
           TITLE: ${{ github.event.issue.title }}
