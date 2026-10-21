@@ -18,6 +18,11 @@ that pairs the task with one.
 grades, so work finished after the deadline does not count and the trial's duration is the deadline. A
 process that starts its own session escapes the group; tasks should not rely on agents that do.
 
+A trial that fails its arm's `verify` is void rather than failed: it never measured the arm, so it is
+excluded from the arm's solve count and spend (a modified grader, by contrast, is a failure). Prompts
+should therefore make the arm condition unmistakable; the first Python run showed an agent told that
+jsonschema was installed hand-rolling the validation in two trials of three.
+
 Success is the check's verdict alone: a trial whose agent crashed or timed out after writing a passing
 solution is a solved trial with missing metrics. Cost per solved task is the arm's total spend divided by
 its solved trials, so a task whose check is flaky or whose agent budget is too small punishes both arms.

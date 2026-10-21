@@ -116,6 +116,26 @@ class CostPerSolveTests(unittest.TestCase):
         a = scoring.arm_summary(self.trials([1, 1, 1], [True, False, False]), "usd")
         self.assertEqual(a["cost_per_solve"], 3.0)
 
+    def test_void_trials_count_for_nothing(self):
+        void = {"success": False, "duration_ms": 1, "cost_usd": 0.12, "arm_ok": False, "grader_intact": True}
+        good = {"success": True, "duration_ms": 1, "cost_usd": 0.2, "arm_ok": True, "grader_intact": True}
+        base = {"success": True, "duration_ms": 1, "cost_usd": 0.08, "arm_ok": True, "grader_intact": True}
+        up = scoring.bench_uplift({"arms": {"with": {"trials": [void, good, void]}, "baseline": {"trials": [base] * 3}}})
+        self.assertEqual((up["with"]["void"], up["with"]["attempted"], up["with"]["solved"]), (2, 1, 1))
+        self.assertAlmostEqual(up["with"]["cost_per_solve"], 0.2, msg="void trials cost nothing and solve nothing")
+        self.assertTrue(up["conclusive"])
+        self.assertAlmostEqual(up["ratio"], 0.08 / 0.2)
+        cheated = dict(good, grader_intact=False, success=False)
+        up = scoring.bench_uplift({"arms": {"with": {"trials": [cheated, good]}, "baseline": {"trials": [base]}}})
+        self.assertEqual((up["with"]["attempted"], up["with"]["solved"]), (2, 1), "a modified grader is a failure, not a void")
+
+    def test_an_arm_with_only_void_trials_is_inconclusive(self):
+        void = {"success": False, "duration_ms": 1, "cost_usd": 0.1, "arm_ok": False}
+        base = {"success": True, "duration_ms": 1, "cost_usd": 0.1, "arm_ok": True}
+        bench = {"arms": {"with": {"trials": [void, void]}, "baseline": {"trials": [base]}}}
+        self.assertTrue(scoring.is_inconclusive(bench))
+        self.assertFalse(scoring.bench_uplift(bench)["conclusive"])
+
     def test_no_solves_anywhere_is_inconclusive(self):
         bench = {"arms": {"with": {"trials": self.trials([5], [False])}, "baseline": {"trials": self.trials([5], [False])}}}
         self.assertTrue(scoring.is_inconclusive(bench))
