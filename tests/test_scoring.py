@@ -129,6 +129,19 @@ class CostPerSolveTests(unittest.TestCase):
         up = scoring.bench_uplift({"arms": {"with": {"trials": [cheated, good]}, "baseline": {"trials": [base]}}})
         self.assertEqual((up["with"]["attempted"], up["with"]["solved"]), (2, 1), "a modified grader is a failure, not a void")
 
+    def test_unit_is_chosen_over_attempted_trials_only(self):
+        good = {"success": True, "duration_ms": 50, "cost_usd": 1.0, "arm_ok": True}
+        base = {"success": True, "duration_ms": 10, "cost_usd": 2.0, "arm_ok": True}
+        void_no_metrics = {"success": False, "duration_ms": 5, "arm_ok": False, "agent_error": True}
+        up = scoring.bench_uplift({"arms": {"with": {"trials": [good, void_no_metrics]}, "baseline": {"trials": [base]}}})
+        self.assertEqual(up["unit"], "usd", "a void trial without metrics must not drag the comparison to wall-clock time")
+        self.assertEqual(up["u"], 1.0)
+
+    def test_failed_attempts_keep_their_cost(self):
+        ok = {"success": True, "duration_ms": 1, "cost_usd": 1.0, "arm_ok": True}
+        wrong = {"success": False, "duration_ms": 1, "cost_usd": 100.0, "arm_ok": True}
+        self.assertEqual(scoring.arm_summary([ok, wrong], "usd")["cost_per_solve"], 101.0)
+
     def test_an_arm_with_only_void_trials_is_inconclusive(self):
         void = {"success": False, "duration_ms": 1, "cost_usd": 0.1, "arm_ok": False}
         base = {"success": True, "duration_ms": 1, "cost_usd": 0.1, "arm_ok": True}

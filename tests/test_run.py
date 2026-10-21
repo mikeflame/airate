@@ -21,6 +21,8 @@ if "TAMPER" in prompt:
     (cwd / "seed.txt").write_text("the grader is now whatever I want")
 if "CRASH" in prompt:
     sys.exit(1)
+if "WRONG" in prompt:
+    (cwd / "done.txt").write_text("wrong answer")
 if "LINGER" in prompt:
     import subprocess
     subprocess.Popen(["bash", "-c", "sleep 2; echo late > done.txt"])
@@ -60,10 +62,11 @@ class HarnessTests(unittest.TestCase):
         (self.task / "workspace").mkdir(parents=True)
         (self.task / "workspace" / "seed.txt").write_text("seed")
         self.spec = {
-            "id": "fake-task", "prompt": "Create done.txt", "check": "test -f done.txt && grep -q seed seed.txt",
+            "id": "fake-task", "prompt": "Create done.txt", "check": "test -f done.txt && grep -q ok done.txt && grep -q seed seed.txt",
             "timeout_s": 30, "protected": ["seed.txt"],
-            "arms": {"with": {"setup": "echo setup > setup.txt", "prompt_suffix": "use the subject", "verify": "test -f setup.txt"},
-                     "baseline": {"setup": "", "prompt_suffix": "FAIL without it", "verify": "! test -f setup.txt"}},
+            "arms": {"with": {"setup": "echo setup > setup.txt", "prompt_suffix": "use the subject",
+                              "policy": "test -f setup.txt", "necessity": "grep -q ok done.txt"},
+                     "baseline": {"setup": "", "prompt_suffix": "FAIL without it", "policy": "! test -f setup.txt"}},
         }
         (self.task / "task.json").write_text(json.dumps(self.spec))
         agent = self.dir / "agent.py"
@@ -109,17 +112,39 @@ class HarnessTests(unittest.TestCase):
         self.assertFalse(trial["success"])
         self.assertEqual((next(out.rglob("workspace")) / "seed.txt").read_text(), "seed", "protected file restored")
 
-    def test_arm_condition_is_verified(self):
-        self.spec["arms"]["with"]["verify"] = "test -f the-subject-was-not-used"
+    def run_one(self, arm: str) -> dict:
         (self.task / "task.json").write_text(json.dumps(self.spec))
         out = self.dir / "runs"
         run.main(["--task", str(self.task), "--subject", "acme/thing", "--agent", "custom",
-                  "--agent-cmd", f"python3 {self.agent} {{prompt_file}} {{cwd}}", "--trials", "1", "--arms", "with",
+                  "--agent-cmd", f"python3 {self.agent} {{prompt_file}} {{cwd}}", "--trials", "1", "--arms", arm,
                   "--task-source", "custom", "--out", str(out)])
-        trial = json.loads(next(out.rglob("trial.json")).read_text())
+        return json.loads(next(out.rglob("trial.json")).read_text())
+
+    def test_subject_not_necessary_after_a_passing_check_is_void(self):
+        self.spec["arms"]["with"]["necessity"] = "test -f the-subject-was-not-used"
+        trial = self.run_one("with")
         self.assertEqual(trial["check_rc"], 0)
-        self.assertFalse(trial["arm_ok"])
-        self.assertFalse(trial["success"])
+        self.assertEqual((trial["arm_ok"], trial["success"]), (False, False))
+
+    def test_broken_policy_is_void_even_when_the_check_passes(self):
+        self.spec["arms"]["baseline"]["prompt_suffix"] = "solve it anyway"   # the agent solves it...
+        self.spec["arms"]["baseline"]["setup"] = "echo setup > setup.txt"  # ...but the baseline policy is broken
+        trial = self.run_one("baseline")
+        self.assertEqual(trial["check_rc"], 0)
+        self.assertEqual((trial["arm_ok"], trial["success"]), (False, False))
+
+    def test_wrong_answer_that_kept_the_policy_is_a_failed_attempt(self):
+        self.spec["arms"]["baseline"]["prompt_suffix"] = "FAIL, give a WRONG answer"
+        trial = self.run_one("baseline")
+        self.assertNotEqual(trial["check_rc"], 0)
+        self.assertEqual((trial["arm_ok"], trial["success"]), (True, False), "not void: its cost counts")
+        self.assertEqual(trial["cost_usd"], 0.01)
+
+    def test_failed_check_in_the_with_arm_is_a_failed_attempt(self):
+        self.spec["arms"]["with"]["prompt_suffix"] = "FAIL, give a WRONG answer"
+        trial = self.run_one("with")
+        self.assertNotEqual(trial["check_rc"], 0)
+        self.assertEqual((trial["arm_ok"], trial["success"]), (True, False), "necessity is not judged on a failing solution")
 
     def test_agent_error_after_a_passing_solution_is_still_a_solve(self):
         self.spec["arms"]["with"]["prompt_suffix"] = "then CRASH"
@@ -209,26 +234,33 @@ class DateTaskTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertNotEqual(self.sh(self.task["check"], self.workspace(tmp, None)), 0)
 
-    def test_baseline_verify_passes_a_dependency_free_solution(self):
+    def test_baseline_policy_is_about_packages_not_correctness(self):
         reference = (FIXTURES / "reference_parse.mjs").read_text()
         with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(self.sh(self.task["arms"]["baseline"]["verify"], self.workspace(tmp, reference)), 0)
+            self.assertEqual(self.sh(self.task["arms"]["baseline"]["policy"], self.workspace(tmp, reference)), 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = self.workspace(tmp, "export function parseDate() { return null; }\n")
+            self.assertNotEqual(self.sh(self.task["check"], ws), 0, "a wrong answer")
+            self.assertEqual(self.sh(self.task["arms"]["baseline"]["policy"], ws), 0, "still a baseline attempt: its cost must count")
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotEqual(self.sh(self.task["arms"]["baseline"]["policy"], self.workspace(tmp, reference, fake_dayjs=True)), 0, "a package was installed")
 
-    def test_with_verify_rejects_a_comment_that_only_mentions_the_subject(self):
+    def test_with_necessity_rejects_a_comment_that_only_mentions_the_subject(self):
         reference = (FIXTURES / "reference_parse.mjs").read_text() + "\n// from 'dayjs'\n"
         with tempfile.TemporaryDirectory() as tmp:
             ws = self.workspace(tmp, reference, fake_dayjs=True)
             self.assertEqual(self.sh(self.task["check"], ws), 0, "the tests pass")
-            self.assertNotEqual(self.sh(self.task["arms"]["with"]["verify"], ws), 0, "but the subject was not necessary")
-            self.assertTrue((ws / "node_modules" / "dayjs").is_dir(), "verify restores what it hid")
+            self.assertEqual(self.sh(self.task["arms"]["with"]["policy"], ws), 0, "the subject is installed")
+            self.assertNotEqual(self.sh(self.task["arms"]["with"]["necessity"], ws), 0, "but the subject was not necessary")
+            self.assertTrue((ws / "node_modules" / "dayjs").is_dir(), "necessity restores what it hid")
 
-    def test_with_verify_requires_the_subject_to_be_loaded(self):
+    def test_with_necessity_requires_the_subject_to_be_loaded(self):
         reference = 'import "dayjs";\n' + (FIXTURES / "reference_parse.mjs").read_text()
         with tempfile.TemporaryDirectory() as tmp:
             ws = self.workspace(tmp, reference, fake_dayjs=True)
             self.assertEqual(self.sh(self.task["check"], ws), 0)
-            self.assertEqual(self.sh(self.task["arms"]["with"]["verify"], ws), 0, "tests fail once dayjs is hidden")
-            self.assertNotEqual(self.sh(self.task["arms"]["baseline"]["verify"], ws), 0, "and the baseline check fails for the same solution")
+            self.assertEqual(self.sh(self.task["arms"]["with"]["necessity"], ws), 0, "tests fail once dayjs is hidden")
+            self.assertNotEqual(self.sh(self.task["arms"]["baseline"]["policy"], ws), 0, "and the baseline policy fails for the same workspace")
 
 
 class ConfigTaskTests(unittest.TestCase):
@@ -248,12 +280,21 @@ class ConfigTaskTests(unittest.TestCase):
     def sh(self, cmd: str, ws: pathlib.Path) -> int:
         return subprocess.run(["bash", "-c", cmd], cwd=ws, capture_output=True).returncode
 
-    def test_reference_solution_passes_and_baseline_verifies(self):
+    def test_reference_solution_passes_and_baseline_policy_holds(self):
         with tempfile.TemporaryDirectory() as tmp:
             ws = self.workspace(tmp, solution=True)
             self.assertEqual(self.sh(self.task["check"], ws), 0)
-            self.assertEqual(self.sh(self.task["arms"]["baseline"]["verify"], ws), 0)
-            self.assertNotEqual(self.sh(self.task["arms"]["with"]["verify"], ws), 0, "no jsonschema in the venv: the with arm cannot be verified")
+            self.assertEqual(self.sh(self.task["arms"]["baseline"]["policy"], ws), 0)
+            self.assertNotEqual(self.sh(self.task["arms"]["with"]["policy"], ws), 0, "no jsonschema in the venv: not a with-arm workspace")
+
+    def test_grader_rejects_a_validator_that_raises_on_invalid_types(self):
+        crashing = (FIXTURES / "reference_validate_config.py").read_text().replace(
+            'if not isinstance(mode, str) or mode not in MODES:', 'if mode not in MODES:')
+        self.assertNotEqual(crashing, (FIXTURES / "reference_validate_config.py").read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = self.workspace(tmp, solution=False)
+            (ws / "validate_config.py").write_text(crashing)
+            self.assertNotEqual(self.sh(self.task["check"], ws), 0, "mode: [] must produce an error, not a TypeError")
 
     def test_empty_workspace_fails(self):
         with tempfile.TemporaryDirectory() as tmp:

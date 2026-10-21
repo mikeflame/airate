@@ -41,7 +41,7 @@ def validate_config(config):
     else:
         _check_port(config["port"], "port", errors)
     mode = config.get("mode")
-    if mode not in MODES:
+    if not isinstance(mode, str) or mode not in MODES:
         errors.append("mode must be 'fast' or 'safe'")
     if "tags" in config:
         tags = config["tags"]
@@ -51,7 +51,8 @@ def validate_config(config):
             for i, tag in enumerate(tags):
                 if not isinstance(tag, str) or not tag:
                     errors.append(f"tags[{i}] must be a non-empty string")
-            if len(set(t for t in tags if isinstance(t, str))) != len(tags):
+            strings = [t for t in tags if isinstance(t, str)]
+            if len(set(strings)) != len(strings):
                 errors.append("tags must be unique")
     if "retries" in config:
         if not _is_int(config["retries"]) or not 0 <= config["retries"] <= 10:
