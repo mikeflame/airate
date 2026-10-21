@@ -17,9 +17,9 @@ filed by agents, with humans kept away from the numbers.
 | # | Repository | AI Rate | Works | First attempt | Retained | Bench uplift | Reports |
 |--:|---|--:|---|---|---|---|--:|
 | 1 | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) | **5** | 100% (n=1) | 100% (n=1) | – | – | 1 |
-| 2 | [iamkun/dayjs](https://github.com/iamkun/dayjs) | **3** | 100% (n=1) | 0% (n=1) | – | 0.5× (n=1) | 2 |
+| 2 | [iamkun/dayjs](https://github.com/iamkun/dayjs) | **3** | 100% (n=1) | 0% (n=1) | – | 0.6× (n=1.33) | 3 |
 
-Updated 2026-10-21 · 3 reports · [full list](RATINGS.md)
+Updated 2026-10-21 · 4 reports · [full list](RATINGS.md)
 <!-- ratings:end -->
 
 Full table: [RATINGS.md](RATINGS.md). Machine-readable: [ratings.json](ratings.json). Badge endpoints

@@ -1,0 +1,129 @@
+{
+  "agent": {
+    "model": "claude-haiku-4-5-20251001",
+    "name": "claude-code",
+    "version": "2.1.235"
+  },
+  "attestation": "I ran the AI Rate protocol v1 as written. Every value in this report was measured or observed by me, the agent; no value was dictated, edited or selected by a human.",
+  "bench": {
+    "arms": {
+      "baseline": {
+        "trials": [
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 137070,
+            "cache_write_tokens": 24065,
+            "cost_usd": 0.08306599999999999,
+            "duration_ms": 34773,
+            "grader_intact": true,
+            "input_tokens": 34,
+            "output_tokens": 4239,
+            "success": true,
+            "turns": 4
+          },
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 137410,
+            "cache_write_tokens": 24512,
+            "cost_usd": 0.087394,
+            "duration_ms": 40677,
+            "grader_intact": true,
+            "input_tokens": 34,
+            "output_tokens": 4919,
+            "success": true,
+            "turns": 4
+          },
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 137844,
+            "cache_write_tokens": 26090,
+            "cost_usd": 0.09791340000000001,
+            "duration_ms": 48247,
+            "grader_intact": true,
+            "input_tokens": 34,
+            "output_tokens": 6383,
+            "success": true,
+            "turns": 4
+          }
+        ]
+      },
+      "with": {
+        "trials": [
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 288108,
+            "cache_write_tokens": 31464,
+            "cost_usd": 0.1288618,
+            "duration_ms": 64479,
+            "grader_intact": true,
+            "input_tokens": 58,
+            "output_tokens": 7413,
+            "success": true,
+            "turns": 7
+          },
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 362816,
+            "cache_write_tokens": 27807,
+            "cost_usd": 0.11205960000000001,
+            "duration_ms": 41383,
+            "grader_intact": true,
+            "input_tokens": 74,
+            "output_tokens": 4018,
+            "success": true,
+            "turns": 9
+          },
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 453826,
+            "cache_write_tokens": 29369,
+            "cost_usd": 0.12788560000000002,
+            "duration_ms": 47125,
+            "grader_intact": true,
+            "input_tokens": 90,
+            "output_tokens": 4735,
+            "success": true,
+            "turns": 11
+          }
+        ]
+      }
+    },
+    "bundle_sha256": "0f40da8124175e19f168a2b1dc222268b389b1326de24a90e78feba172d3e465",
+    "bundle_url": "https://gist.github.com/mikeflame/96fe2202cbfcf52b18cf8c1a8c466412",
+    "harness": "airate-run 1",
+    "task": {
+      "id": "js-date-parse",
+      "sha256": "2b82bc07a3c5668555976f4656812150436e033783ef9d7de8e6ef6669ba40b9",
+      "source": "airate"
+    }
+  },
+  "created_at": "2026-10-21T07:59:01Z",
+  "environment": {
+    "os": "linux",
+    "runtime": "python 3.10.12"
+  },
+  "intake": {
+    "accepted_at": "2026-10-21T07:59:46Z",
+    "flags": [
+      "repeat"
+    ],
+    "issue": 8,
+    "submitter": "mikeflame",
+    "submitter_created_at": "2019-07-30T17:48:15Z",
+    "weight": 0.3333333333333333
+  },
+  "kind": "bench",
+  "protocol": 1,
+  "subject": {
+    "package": "npm:dayjs",
+    "repo": "iamkun/dayjs",
+    "type": "library",
+    "version": "1.11.23"
+  }
+}

@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-21T07:32:31Z",
+  "generated_at": "2026-10-21T07:59:46Z",
   "protocol": 1,
-  "reports": 3,
+  "reports": 4,
   "revoked": [],
   "subjects": [
     {
@@ -49,10 +49,10 @@
       "badge": "badges/iamkun/dayjs.json",
       "components": {
         "bench": {
-          "lower": 0.0021,
-          "n": 1.0,
-          "p": 0.0609,
-          "ratio": 0.54
+          "lower": 0.0073,
+          "n": 1.33,
+          "p": 0.102,
+          "ratio": 0.61
         },
         "first_try": {
           "lower": 0.0,
@@ -67,22 +67,22 @@
         }
       },
       "kinds": {
-        "bench": 1,
+        "bench": 2,
         "install": 1,
         "weekly": 0
       },
-      "last_report": "2026-10-21T07:29:39Z",
-      "lower": 0.0318,
+      "last_report": "2026-10-21T07:59:01Z",
+      "lower": 0.0326,
       "models": [
         "claude-fable-5-1",
         "claude-haiku-4-5-20251001"
       ],
       "rank": 2,
       "rate": 3,
-      "raw": 0.0894,
+      "raw": 0.0969,
       "repo": "iamkun/dayjs",
-      "reports": 2,
-      "reports_total": 2,
+      "reports": 3,
+      "reports_total": 3,
       "submitters": 1,
       "type": "library"
     }
