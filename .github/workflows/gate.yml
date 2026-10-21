@@ -21,7 +21,9 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          changed=$(git diff --name-only --no-renames "$BASE" "$HEAD")   # a rename out of reports/ must show the deletion
+          # Diff from the merge-base, not the base tip: intake commits land on main all the time and must not
+          # be blamed on the pull request. Rename detection off: a report moved out of reports/ shows as a deletion.
+          changed=$(git diff --name-only --no-renames "$(git merge-base "$BASE" "$HEAD")" "$HEAD")
           echo "$changed"
           bad=$(echo "$changed" | grep -E '^(reports/|badges/|ratings\.json$|RATINGS\.md$)' || true)
           if [ -n "$bad" ]; then
