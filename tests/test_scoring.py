@@ -27,7 +27,15 @@ class BenchUpliftTests(unittest.TestCase):
         self.assertEqual(up["unit"], "usd")
         # with: median 0.13 / 100% ; baseline: median 0.33 / 50% → 0.66 ; ratio ≈ 5.08
         self.assertAlmostEqual(up["ratio"], 0.33 / 0.5 / 0.13, places=6)
-        self.assertGreater(up["u"], 0.8)
+        self.assertEqual(up["u"], 1.0, "a 5× cheaper solve is full marks")
+
+    def test_uplift_scale(self):
+        self.assertEqual(scoring.uplift_score(1.0), 0.5)
+        self.assertEqual(scoring.uplift_score(2.0), 1.0)
+        self.assertEqual(scoring.uplift_score(0.5), 0.0)
+        self.assertAlmostEqual(scoring.uplift_score(2 ** 0.5), 0.75)
+        self.assertEqual(scoring.uplift_score(float("inf")), 1.0)
+        self.assertEqual(scoring.uplift_score(0.0), 0.0)
 
     def test_equal_arms_are_neutral(self):
         t = {"success": True, "duration_ms": 1000, "cost_usd": 1.0}
@@ -52,6 +60,7 @@ class BenchUpliftTests(unittest.TestCase):
         b = {"success": True, "duration_ms": 4000, "input_tokens": 30, "output_tokens": 30, "cost_usd": 0.5}
         self.assertEqual(scoring.pick_unit([a], [b]), "tokens")
         self.assertEqual(scoring.bench_uplift({"arms": {"with": {"trials": [a]}, "baseline": {"trials": [b]}}})["ratio"], 3.0)
+        self.assertEqual(scoring.bench_uplift({"arms": {"with": {"trials": [a]}, "baseline": {"trials": [b]}}})["u"], 1.0)
         c = {"success": True, "duration_ms": 2000}
         self.assertEqual(scoring.pick_unit([a], [c]), "duration_ms")
 
@@ -69,11 +78,14 @@ class CompositeTests(unittest.TestCase):
     def test_thin_component_has_reduced_weight(self):
         thick = {"first_use": {"p": 1.0, "n": 9, "lower": 0.9}, "keep": {"p": 1.0, "n": 9, "lower": 0.9}, "bench": None}
         base = scoring.composite(thick, 9)
-        one_bench = scoring.composite(thick | {"bench": {"p": 0.75, "n": 1, "lower": 0.2}}, 10)
-        three_bench = scoring.composite(thick | {"bench": {"p": 0.75, "n": 3, "lower": 0.4}}, 12)
-        self.assertAlmostEqual(one_bench["raw"], (0.7 + 0.1 * 0.75) / 0.8)
-        self.assertAlmostEqual(three_bench["raw"], 0.7 + 0.3 * 0.75)
-        self.assertGreater(one_bench["lower"], base["lower"], "a first positive bench report must not lower the rate")
+        one_good = scoring.composite(thick | {"bench": {"p": 1.0, "n": 1, "lower": 0.4}}, 10)
+        one_flat = scoring.composite(thick | {"bench": {"p": 0.5, "n": 1, "lower": 0.2}}, 10)
+        three_flat = scoring.composite(thick | {"bench": {"p": 0.5, "n": 3, "lower": 0.3}}, 12)
+        self.assertAlmostEqual(one_flat["raw"], (0.7 + 0.1 * 0.5) / 0.8)
+        self.assertAlmostEqual(three_flat["raw"], 0.7 + 0.3 * 0.5)
+        self.assertGreater(one_good["lower"], base["lower"], "a first bench report that halves the cost must not lower the rate")
+        self.assertLess(one_flat["lower"], base["lower"], "a bench report that finds no uplift lowers it")
+        self.assertLess(three_flat["lower"], one_flat["lower"], "and three of them lower it more")
 
     def test_empty(self):
         self.assertEqual(scoring.composite({"first_use": None, "keep": None, "bench": None}, 0), {"raw": 0.0, "lower": 0.0, "n": 0})

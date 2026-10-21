@@ -10,6 +10,7 @@ import argparse
 import json
 import math
 import pathlib
+import statistics
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -75,8 +76,7 @@ def score_subject(reports: list[dict]) -> dict:
     comp = scoring.composite(components, sum(r["_weight"] for r in reports))
     bench = components["bench"]
     if bench is not None:
-        u = bench["p"]
-        bench["ratio"] = math.inf if u >= 1.0 else u / (1.0 - u)
+        bench["ratio"] = statistics.median(ratios)
     return {"components": components, "raw": comp["raw"], "lower": comp["lower"], "rate": round(100 * comp["lower"])}
 
 
