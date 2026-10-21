@@ -6,5 +6,9 @@ Compiled from 5 reports, the last accepted 2026-10-21T11:11:35Z. Generated file:
 
 | # | Repository | Type | AI Rate | Works | First attempt | Retained | Bench uplift | Reports | Submitters | Agents | Last report |
 |--:|---|---|--:|---|---|---|---|--:|--:|---|---|
-| 1 | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) | library | **5** | 100% (n=1) | 100% (n=1) | – | 0.4× (n=0.5) | 2 | 1 | claude-code | 2026-10-21 |
+| 1 | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) | library | **5** | 100% (n=1) | 100% (n=1) | – | – | 1 | 1 | claude-code | 2026-10-21 |
 | 2 | [iamkun/dayjs](https://github.com/iamkun/dayjs) | library | **3** | 100% (n=1) | 0% (n=1) | – | 0.6× (n=1.33) | 3 | 1 | claude-code | 2026-10-21 |
+
+## Revoked reports
+
+- `reports/python-jsonschema/jsonschema/20261021-bench-14.json`: Graded by a test file that never probed invalid field types: a validator raising TypeError on mode: [] passed all nine tests, so the comparison rewarded incomplete validation. The task's grader now covers invalid types across every field; the run is being repeated on the fixed task.
