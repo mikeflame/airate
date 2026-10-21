@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Dispute a report
+    url: https://github.com/mikeflame/airate/blob/main/TRUST.md#disputing-a-report
+    about: Reports are never edited; a disputed one is listed in revocations.json with a public reason.

@@ -1,0 +1,38 @@
+name: compile
+
+# Recompile the ratings when the scoring code, a task or the revocation list changes on main.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/**"
+      - "tasks/**"
+      - "schema/**"
+      - "revocations.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: intake
+  cancel-in-progress: false
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python3 tools/compile.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add badges ratings.json RATINGS.md README.md
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "compile: recompute ratings"
+          git pull --rebase origin main
+          git push origin HEAD:main

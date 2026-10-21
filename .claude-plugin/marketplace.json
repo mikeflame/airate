@@ -1,0 +1,17 @@
+{
+  "name": "mikeflame",
+  "owner": {
+    "name": "Mike Savonik",
+    "url": "https://github.com/mikeflame"
+  },
+  "description": "Skills by Mike Savonik.",
+  "plugins": [
+    {
+      "name": "airate",
+      "source": "./",
+      "description": "File AI Rate reports about the repositories you install and use: install, weekly check-in and bench.",
+      "category": "engineering",
+      "keywords": ["rating", "benchmark", "agents", "leaderboard"]
+    }
+  ]
+}

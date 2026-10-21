@@ -1,0 +1,98 @@
+import json
+import pathlib
+import tempfile
+import unittest
+
+from helpers import fixture, make_root, store
+import compile as compiler
+
+
+class CompileTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = make_root(pathlib.Path(self.tmp.name), with_tasks=False)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _other(self, report, repo):
+        r = json.loads(json.dumps(report))
+        r["subject"]["repo"] = repo
+        return r
+
+    def test_ranking_badges_and_markdown(self):
+        install = fixture("install.json")
+        for i in range(1, 4):
+            store(self.root, install, issue=i, submitter=f"user{i}")
+        store(self.root, self._other(install, "tj/commander.js"), issue=10, submitter="solo")
+        store(self.root, self._other(install, "ghost/ignored"), issue=20, submitter="owner", weight=0.0, flags=["maintainer"])
+        ratings = compiler.compile_ratings(self.root)
+        repos = [s["repo"] for s in ratings["subjects"]]
+        self.assertEqual(repos, ["iamkun/dayjs", "tj/commander.js"])  # weight-0-only subjects are not listed
+        top, second = ratings["subjects"]
+        self.assertEqual((top["rank"], top["reports"], top["submitters"]), (1, 3, 3))
+        self.assertEqual(top["rate"], round(100 * 0.6466), msg="three perfect reports → Wilson lower bound ≈ 0.65")
+        self.assertEqual(second["rate"], 38)
+        self.assertEqual(top["components"]["bench"], None)
+        changed = compiler.write_all(self.root, ratings)
+        self.assertTrue((self.root / "badges" / "iamkun" / "dayjs.json").exists())
+        badge = json.loads((self.root / "badges" / "iamkun" / "dayjs.json").read_text())
+        self.assertEqual(badge, {"schemaVersion": 1, "label": "AI Rate", "message": str(top["rate"]), "color": "green"})
+        md = (self.root / "RATINGS.md").read_text()
+        self.assertIn("| 1 | [iamkun/dayjs](https://github.com/iamkun/dayjs) | library | **65** | 100% (n=3) | 100% (n=3) | – | 3 | 3 | claude-code |", md)
+        readme = (self.root / "README.md").read_text()
+        self.assertIn("<!-- ratings:start -->\n| # | Repository | AI Rate |", readme)
+        self.assertNotIn("old", readme)
+        self.assertTrue(readme.endswith("<!-- ratings:end -->\n\ntail\n"))
+        self.assertEqual(set(p.name for p in changed), {"ratings.json", "RATINGS.md", "README.md", "dayjs.json", "commander.js.json"})
+        self.assertEqual(compiler.write_all(self.root, compiler.compile_ratings(self.root)), [], "second run must be a no-op")
+        self.assertEqual(ratings["generated_at"], "2026-10-20T20:00:00Z", "generated_at is the newest acceptance, not the wall clock")
+
+    def test_weekly_and_bench_components(self):
+        store(self.root, fixture("install.json"), issue=1, submitter="a")
+        store(self.root, fixture("weekly.json"), issue=2, submitter="a")
+        store(self.root, fixture("bench.json"), issue=3, submitter="b")
+        s = compiler.compile_ratings(self.root)["subjects"][0]
+        self.assertEqual(s["kinds"], {"install": 1, "weekly": 1, "bench": 1})
+        self.assertEqual(s["components"]["keep"]["n"], 2)
+        self.assertAlmostEqual(s["components"]["bench"]["ratio"], 5.08, places=2)
+        self.assertGreater(s["rate"], 38)
+
+    def test_removed_subject_lowers_keep(self):
+        store(self.root, fixture("install.json"), issue=1, submitter="a")
+        wk = fixture("weekly.json")
+        wk["weekly"].update({"status": "removed", "verdict": "replace"})
+        store(self.root, wk, issue=2, submitter="a")
+        s = compiler.compile_ratings(self.root)["subjects"][0]
+        self.assertEqual(s["components"]["keep"]["p"], 0.5)
+
+    def test_revocation_excludes_report(self):
+        p1 = store(self.root, fixture("install.json"), issue=1, submitter="a")
+        store(self.root, fixture("install.json"), issue=2, submitter="b")
+        (self.root / "revocations.json").write_text(json.dumps([{"report": p1.relative_to(self.root).as_posix(), "reason": "fabricated: issue #1 author admitted it", "by": "mikeflame", "date": "2026-10-21"}]))
+        ratings = compiler.compile_ratings(self.root)
+        self.assertEqual(ratings["subjects"][0]["reports"], 1)
+        self.assertEqual(ratings["revoked"][0]["report"], p1.relative_to(self.root).as_posix())
+        self.assertIn("## Revoked reports", compiler.render_ratings_md(ratings))
+
+    def test_empty(self):
+        ratings = compiler.compile_ratings(self.root)
+        self.assertEqual(ratings["subjects"], [])
+        self.assertIn("_No reports yet._", compiler.render_ratings_md(ratings))
+        self.assertIsNone(ratings["generated_at"])
+        self.assertIn("_No reports yet._", compiler.update_readme(self.root, ratings))
+
+    def test_check_mode(self):
+        store(self.root, fixture("install.json"), issue=1)
+        self.assertEqual(compiler.main(["--root", str(self.root), "--check"]), 1)
+        self.assertEqual(compiler.main(["--root", str(self.root)]), 0)
+        self.assertEqual(compiler.main(["--root", str(self.root), "--check"]), 0)
+
+    def test_badge_colours(self):
+        self.assertEqual(compiler.badge_for(None)["message"], "unrated")
+        self.assertEqual(compiler.badge_for(80)["color"], "brightgreen")
+        self.assertEqual(compiler.badge_for(5)["color"], "red")
+
+
+if __name__ == "__main__":
+    unittest.main()

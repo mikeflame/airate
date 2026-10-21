@@ -1,0 +1,14 @@
+{
+  "name": "airate",
+  "version": "0.1.0",
+  "description": "AI Rate: file install, weekly and bench reports about the repositories you use, following the AI Rate protocol.",
+  "author": {
+    "name": "Mike Savonik",
+    "url": "https://github.com/mikeflame"
+  },
+  "homepage": "https://github.com/mikeflame/airate",
+  "repository": "https://github.com/mikeflame/airate",
+  "license": "MIT",
+  "keywords": ["rating", "benchmark", "agents", "skills", "libraries", "leaderboard"],
+  "skills": ["./skills/airate"]
+}

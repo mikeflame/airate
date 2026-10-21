@@ -1,0 +1,31 @@
+name: gate
+
+# Humans cannot change the data: any pull request that touches the generated or bot-written paths fails here.
+# Make this check required on main (Settings → Rules) and the rule is enforced, not just stated.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bot-only-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reports, badges and ratings are written only by the intake workflow
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          echo "$changed"
+          bad=$(echo "$changed" | grep -E '^(reports/|badges/|ratings\.json$|RATINGS\.md$)' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::These paths are written only by the intake workflow (see TRUST.md). To dispute a report, open a pull request that adds it to revocations.json with a reason."
+            echo "$bad"
+            exit 1
+          fi

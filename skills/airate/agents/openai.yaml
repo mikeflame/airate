@@ -1,0 +1,3 @@
+interface:
+  display_name: "AI Rate"
+  short_description: "Measure and report how a repository performs in real agent work"

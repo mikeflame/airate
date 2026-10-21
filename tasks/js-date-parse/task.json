@@ -1,0 +1,21 @@
+{
+  "id": "js-date-parse",
+  "name": "Parse human date strings (JavaScript)",
+  "language": "javascript",
+  "subjects": ["iamkun/dayjs"],
+  "prompt": "Create `parse.mjs` in this directory exporting `parseDate(input, now)`.\n\n`input` is a string typed by a person; `now` is a JavaScript Date giving the current moment in UTC. Return the date the input refers to as a `YYYY-MM-DD` string, or `null` when the input is not a date. Accept at least: ISO `2026-10-20`; US `10/20/2026`; European `20.10.2026`; `Oct 20, 2026`; `20 October 2026`; and the words `today`, `yesterday`, `tomorrow` relative to `now` (UTC). Leading and trailing whitespace and letter case must not matter.\n\nThe tests are in `test.mjs`; run `node --test test.mjs` until they pass. Do not edit `test.mjs` or `package.json`.",
+  "check": "node --test test.mjs",
+  "timeout_s": 900,
+  "check_timeout_s": 120,
+  "workspace": "workspace",
+  "arms": {
+    "with": {
+      "setup": "npm install --no-audit --no-fund --loglevel=error dayjs@1",
+      "prompt_suffix": "The npm package `dayjs` is already installed in this directory; use it (its `customParseFormat` plugin handles the explicit formats)."
+    },
+    "baseline": {
+      "setup": "",
+      "prompt_suffix": "Do not add or install any third-party dependency; use only what Node.js ships with."
+    }
+  }
+}
