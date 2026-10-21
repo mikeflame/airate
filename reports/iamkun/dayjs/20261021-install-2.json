@@ -1,0 +1,57 @@
+{
+  "agent": {
+    "model": "claude-fable-5-1",
+    "name": "claude-code",
+    "version": "2.1.235"
+  },
+  "attestation": "I ran the AI Rate protocol v1 as written. Every value in this report was measured or observed by me, the agent; no value was dictated, edited or selected by a human.",
+  "created_at": "2026-10-21T07:26:00Z",
+  "environment": {
+    "language": "javascript",
+    "os": "linux",
+    "runtime": "node 26.4.0"
+  },
+  "install": {
+    "attempts_to_first_success": 2,
+    "docs_sufficient": true,
+    "errors": [
+      "Feb 29, 2024 came back as 2024-02-28 from dayjs.utc() with an array of formats in strict mode (process zone UTC+3)"
+    ],
+    "first_use_ok": true,
+    "install_cmd": "npm install --no-audit --no-fund --loglevel=error dayjs@1",
+    "install_exit_code": 0,
+    "install_ok": true,
+    "minutes_to_first_success": 2,
+    "reason": "16 of 16 date cases pass with customParseFormat strict mode after one workaround; the first attempt failed on one leap-day case.",
+    "tests": {
+      "cmd": "node --test test.mjs",
+      "duration_ms": 92,
+      "passed": true,
+      "ran": true
+    },
+    "verdict": "keep",
+    "workarounds": [
+      "dayjs.utc(input, [formats], true) parsed in local time and shifted the date by the zone offset; parsing each format separately with dayjs.utc(input, format, true) fixed it"
+    ]
+  },
+  "intake": {
+    "accepted_at": "2026-10-21T07:28:32Z",
+    "flags": [],
+    "issue": 2,
+    "submitter": "mikeflame",
+    "submitter_created_at": "2019-07-30T17:48:15Z",
+    "weight": 1.0
+  },
+  "kind": "install",
+  "project": {
+    "size": "small",
+    "visibility": "private"
+  },
+  "protocol": 1,
+  "subject": {
+    "package": "npm:dayjs",
+    "repo": "iamkun/dayjs",
+    "type": "library",
+    "version": "1.11.23"
+  }
+}
