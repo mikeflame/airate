@@ -1,0 +1,129 @@
+{
+  "agent": {
+    "model": "claude-haiku-4-5-20251001",
+    "name": "claude-code",
+    "version": "2.1.235"
+  },
+  "attestation": "I ran the AI Rate protocol v1 as written. Every value in this report was measured or observed by me, the agent; no value was dictated, edited or selected by a human.",
+  "bench": {
+    "arms": {
+      "baseline": {
+        "trials": [
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 137204,
+            "cache_write_tokens": 22957,
+            "cost_usd": 0.0717534,
+            "duration_ms": 22073,
+            "grader_intact": true,
+            "input_tokens": 34,
+            "output_tokens": 2417,
+            "success": true,
+            "turns": 4
+          },
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 141877,
+            "cache_write_tokens": 27317,
+            "cost_usd": 0.1028107,
+            "duration_ms": 54880,
+            "grader_intact": true,
+            "input_tokens": 34,
+            "output_tokens": 6791,
+            "success": true,
+            "turns": 4
+          },
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 138002,
+            "cache_write_tokens": 23800,
+            "cost_usd": 0.07889420000000001,
+            "duration_ms": 30720,
+            "grader_intact": true,
+            "input_tokens": 34,
+            "output_tokens": 3492,
+            "success": true,
+            "turns": 4
+          }
+        ]
+      },
+      "with": {
+        "trials": [
+          {
+            "agent_error": false,
+            "arm_ok": false,
+            "cache_read_tokens": 161090,
+            "cache_write_tokens": 44026,
+            "cost_usd": 0.12171299999999999,
+            "duration_ms": 32597,
+            "grader_intact": true,
+            "input_tokens": 42,
+            "output_tokens": 3502,
+            "success": false,
+            "turns": 5
+          },
+          {
+            "agent_error": false,
+            "arm_ok": true,
+            "cache_read_tokens": 444554,
+            "cache_write_tokens": 36346,
+            "cost_usd": 0.1947894,
+            "duration_ms": 139190,
+            "grader_intact": true,
+            "input_tokens": 82,
+            "output_tokens": 15512,
+            "success": true,
+            "turns": 10
+          },
+          {
+            "agent_error": false,
+            "arm_ok": false,
+            "cache_read_tokens": 191199,
+            "cache_write_tokens": 28351,
+            "cost_usd": 0.12582390000000002,
+            "duration_ms": 80800,
+            "grader_intact": true,
+            "input_tokens": 42,
+            "output_tokens": 9992,
+            "success": false,
+            "turns": 5
+          }
+        ]
+      }
+    },
+    "bundle_sha256": "8b53beb1e033987f888112b800fec6a9bac23dc3e07a0ace60a249434186f9d6",
+    "bundle_url": "https://gist.github.com/mikeflame/12c8bd64e3424d16001269137181c765",
+    "harness": "airate-run 1",
+    "task": {
+      "id": "py-config-validate",
+      "sha256": "c8f07c56bc9acccb9e2a38d5d2793fe7658e978cfd89b4e9a55a2c4343b5044c",
+      "source": "airate"
+    }
+  },
+  "created_at": "2026-10-21T11:09:43Z",
+  "environment": {
+    "os": "linux",
+    "runtime": "python 3.10.12"
+  },
+  "intake": {
+    "accepted_at": "2026-10-21T11:11:35Z",
+    "flags": [
+      "repeat"
+    ],
+    "issue": 14,
+    "submitter": "mikeflame",
+    "submitter_created_at": "2019-07-30T17:48:15Z",
+    "weight": 0.5
+  },
+  "kind": "bench",
+  "protocol": 1,
+  "subject": {
+    "package": "pypi:jsonschema",
+    "repo": "python-jsonschema/jsonschema",
+    "type": "library",
+    "version": "4.26.0"
+  }
+}
