@@ -26,6 +26,11 @@ for attempt in 1 2 3 4 5; do
   if ! git fetch -q "$remote" "$branch" || ! git reset -q --hard "$remote/$branch"; then
     reason="could not sync with $remote/$branch"; sleep $((attempt * backoff)); continue
   fi
+  # A previous attempt's output must not survive into this one: an untracked or ignored leftover would
+  # make the producer believe its work is already on main.
+  if [ -n "$paths" ] && ! git clean -fdxq -- $paths; then
+    reason="could not clean producer output from the previous attempt"; sleep $((attempt * backoff)); continue
+  fi
   STORE_MANIFEST=$(mktemp); export STORE_MANIFEST
   "$@"; code=$?
   [ "$code" -ne 0 ] && exit "$code"
@@ -51,7 +56,9 @@ for attempt in 1 2 3 4 5; do
   if git push -q "$remote" "HEAD:$branch" && git fetch -q "$remote" "$branch" && git merge-base --is-ancestor HEAD "$remote/$branch"; then
     echo "stored $(git rev-parse --short HEAD) on $remote/$branch"; exit 0
   fi
-  reason="push rejected or the commit is not on $remote/$branch"; sleep $((attempt * backoff))
+  reason="push rejected or the commit is not on $remote/$branch"
+  echo "store.sh: attempt $attempt: $reason; retrying from a fresh $remote/$branch" >&2
+  sleep $((attempt * backoff))
 done
 echo "store.sh: not stored: $reason" >&2
 [ -n "$comment" ] && printf 'The submission was validated but could not be stored (%s). Nothing was stored. Edit the issue to retry.\n' "$reason" > "$comment"

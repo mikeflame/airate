@@ -7,6 +7,7 @@ Usage: python3 tools/compile.py [--root DIR] [--check]
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import math
 import os
@@ -23,6 +24,11 @@ README_END = "<!-- ratings:end -->"
 README_ROWS = 10
 BADGE_LABEL = "AI Rate"
 BADGE_COLORS = ((80, "brightgreen"), (60, "green"), (40, "yellow"), (20, "orange"), (0, "red"))
+
+
+def parse_timestamp(value: str) -> dt.datetime:
+    """An aware datetime, so that 23:00+14:00 sorts before 10:00Z as it should."""
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def load_reports(root: pathlib.Path) -> list[dict]:
@@ -76,8 +82,8 @@ def score_subject(reports: list[dict]) -> dict:
             if flags & {"maintainer", "duplicate_week"}:
                 continue
             key = r["intake"]["submitter"].lower()
-            stamp = (r["created_at"], r["intake"]["issue"])
-            if key not in latest_weekly or stamp > (latest_weekly[key]["created_at"], latest_weekly[key]["intake"]["issue"]):
+            stamp = (parse_timestamp(r["created_at"]), r["intake"]["issue"])
+            if key not in latest_weekly or stamp > (parse_timestamp(latest_weekly[key]["created_at"]), latest_weekly[key]["intake"]["issue"]):
                 latest_weekly[key] = r
         elif r["kind"] == "bench" and w > 0:
             if scoring.is_inconclusive(r["bench"]):
@@ -118,7 +124,7 @@ def compile_ratings(root: pathlib.Path) -> dict:
         scored = score_subject(items)
         if all(c is None for c in scored["components"].values()):
             continue
-        latest = max(r["created_at"] for r in (counted or items))
+        latest = max(parse_timestamp(r["created_at"]) for r in (counted or items)).astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         subjects.append({
             "repo": items[-1]["subject"]["repo"],
             "type": items[-1]["subject"]["type"],

@@ -35,6 +35,7 @@ import pathlib
 import platform
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -57,17 +58,33 @@ def sha256_dir(folder: pathlib.Path) -> str:
     return h.hexdigest()
 
 
+def run_capture(cmd: list[str], cwd: pathlib.Path, timeout: int, env: dict | None = None) -> tuple[int | None, str, str]:
+    """Run cmd in its own process group. On timeout the whole group is killed and reaped before returning,
+    so nothing the command started keeps working on the workspace while it is graded.
+    Returns (exit code or None on timeout, stdout, stderr)."""
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return proc.returncode, out, err
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        out, err = proc.communicate()
+        return None, out or "", err or ""
+
+
 def run_shell(cmd: str, cwd: pathlib.Path, timeout: int, log: pathlib.Path) -> int:
     if not cmd.strip():
         log.write_text("")
         return 0
-    try:
-        proc = subprocess.run(["bash", "-c", cmd], cwd=cwd, capture_output=True, text=True, timeout=timeout)
-        log.write_text(f"$ {cmd}\n[exit {proc.returncode}]\n{proc.stdout}{proc.stderr}")
-        return proc.returncode
-    except subprocess.TimeoutExpired:
-        log.write_text(f"$ {cmd}\n[timeout after {timeout}s]\n")
+    rc, out, err = run_capture(["bash", "-c", cmd], cwd, timeout)
+    if rc is None:
+        log.write_text(f"$ {cmd}\n[timeout after {timeout}s; process group killed]\n{out}{err}")
         return 124
+    log.write_text(f"$ {cmd}\n[exit {rc}]\n{out}{err}")
+    return rc
 
 
 def parse_claude_result(stdout: str) -> dict:
@@ -127,15 +144,13 @@ def run_trial(args: argparse.Namespace, task: dict, task_dir: pathlib.Path, arm:
     metrics: dict = {"error": True}
     stdout = ""
     try:
-        proc = subprocess.run(agent_command(args, prompt, prompt_file, workspace), cwd=workspace, env=env,
-                              capture_output=True, text=True, timeout=task.get("timeout_s", 900))
-        stdout = proc.stdout
-        (trial_dir / "agent.stderr").write_text(proc.stderr)
-        parser = parse_claude_result if args.agent == "claude" else parse_custom_result
-        metrics = parser(stdout) if proc.returncode == 0 and stdout.strip() else {"error": True}
-    except subprocess.TimeoutExpired as exc:
-        stdout = (exc.stdout or b"").decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        (trial_dir / "agent.stderr").write_text(f"timeout after {task.get('timeout_s', 900)}s\n")
+        rc, stdout, stderr = run_capture(agent_command(args, prompt, prompt_file, workspace), workspace, task.get("timeout_s", 900), env)
+        if rc is None:
+            (trial_dir / "agent.stderr").write_text(f"timeout after {task.get('timeout_s', 900)}s; the agent's process group was killed\n{stderr}")
+        else:
+            (trial_dir / "agent.stderr").write_text(stderr)
+            parser = parse_claude_result if args.agent == "claude" else parse_custom_result
+            metrics = parser(stdout) if rc == 0 and stdout.strip() else {"error": True}
     except (ValueError, OSError) as exc:
         (trial_dir / "agent.stderr").write_text(f"{type(exc).__name__}: {exc}\n")
     wall_ms = int((time.monotonic() - started) * 1000)

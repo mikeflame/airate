@@ -1,0 +1,26 @@
+{
+  "id": "py-config-validate",
+  "name": "Validate a service configuration (Python)",
+  "language": "python",
+  "subjects": ["python-jsonschema/jsonschema"],
+  "prompt": "Create `validate_config.py` in this directory exposing `validate_config(config) -> list[str]`: a list of human-readable error messages for a service configuration dict, empty when the configuration is valid. Each message must contain the dotted path of the offending field (for example `db.port`, or `tags[1]` for list items, `$` for the whole document).\n\nRules: `name` is a required non-empty string. `port` is a required integer from 1 to 65535 (booleans are not integers). `mode` is required and is either `fast` or `safe`. `tags` is optional; when present it is a list of unique non-empty strings. `retries` is optional; when present it is an integer from 0 to 10. `db` is required when `mode` is `safe` and must then be an object with a non-empty string `host` and an integer `port` from 1 to 65535; when `mode` is `fast`, `db` is optional but, when present, must satisfy the same rules. No other top-level keys are allowed, and the configuration itself must be an object.\n\nThe tests are in `test_validate_config.py`; run `.venv/bin/python -m unittest test_validate_config.py` until they pass. Do not edit `test_validate_config.py`.",
+  "check": ".venv/bin/python -m unittest -q test_validate_config.py",
+  "timeout_s": 900,
+  "check_timeout_s": 120,
+  "workspace": "workspace",
+  "protected": ["test_validate_config.py"],
+  "arms": {
+    "with": {
+      "setup": "python3 -m venv .venv && .venv/bin/pip install -q 'jsonschema>=4.17'",
+      "prompt_suffix": "The Python package `jsonschema` is installed in `.venv`; use it (`.venv/bin/python`).",
+      "verify": "sp=$(.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()[\"purelib\"])') && test -d \"$sp/jsonschema\" && mv \"$sp/jsonschema\" \"$sp/.hidden-jsonschema\" && { .venv/bin/python -m unittest -q test_validate_config.py >/dev/null 2>&1 && rc=1 || rc=0; }; mv \"$sp/.hidden-jsonschema\" \"$sp/jsonschema\" 2>/dev/null; exit ${rc:-1}",
+      "verify_doc": "the subject is necessary: with the jsonschema package hidden from the venv, the tests must fail"
+    },
+    "baseline": {
+      "setup": "python3 -m venv .venv",
+      "prompt_suffix": "Do not install any third-party package; use only the Python standard library (`.venv/bin/python` is a plain virtual environment).",
+      "verify": "test -z \"$(.venv/bin/pip freeze --exclude-editable 2>/dev/null)\" && .venv/bin/python -m unittest -q test_validate_config.py >/dev/null 2>&1",
+      "verify_doc": "no third-party package is installed in the venv and the tests pass"
+    }
+  }
+}

@@ -15,6 +15,8 @@ import datetime as dt
 import json
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -47,6 +49,14 @@ def extract_json(body: str) -> dict:
         return json.loads(text)
     except ValueError as exc:
         raise Rejected(f"The issue body is not valid JSON ({exc}). Paste the report JSON, optionally inside a ```json fence.")
+
+
+def git_ignores(root: pathlib.Path, path: pathlib.Path) -> bool:
+    """True when git would silently drop the file: a report must never match an ignore rule."""
+    if not shutil.which("git") or not (root / ".git").exists():
+        return False
+    proc = subprocess.run(["git", "check-ignore", "-q", "--", str(path.relative_to(root))], cwd=root, capture_output=True)
+    return proc.returncode == 0
 
 
 def existing_reports(root: pathlib.Path, repo: str) -> list[dict]:
@@ -149,10 +159,13 @@ def accept(ctx: dict, root: pathlib.Path) -> str:
         "weight": weight,
         "flags": flags,
     }
-    day = parse_timestamp(report["created_at"]).strftime("%Y%m%d")
+    day = parse_timestamp(report["created_at"]).astimezone(dt.timezone.utc).strftime("%Y%m%d")
     path = root / "reports" / repo.lower() / f"{day}-{report['kind']}-{issue}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    if git_ignores(root, path):
+        path.unlink()
+        raise RuntimeError(f"{path.relative_to(root).as_posix()} would be ignored by .gitignore; the repository's ignore rules must be fixed before this report can be stored")
     ratings = compiler.compile_ratings(root)
     compiler.record_written(root, [path] + compiler.write_all(root, ratings))
     entry = next((s for s in ratings["subjects"] if s["repo"].lower() == repo.lower()), None)
