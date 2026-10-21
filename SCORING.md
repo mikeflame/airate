@@ -29,9 +29,10 @@ Each component is a weighted proportion `p = Σ w·x / Σ w` with an effective s
   weekly check-in with status `still_used` and a verdict other than `replace`.
 - **Bench uplift** (bench reports): for each report, cost per solved task is the median trial cost of an
   arm divided by its solve rate (USD when every trial reports it, else total tokens, else wall-clock
-  milliseconds; the same unit for both arms). With `r = baseline ÷ with`, the report's `x = r / (1 + r)`:
-  `0.5` means the subject changes nothing, above `0.5` it makes the task cheaper per solve, `1` when the
-  task is unsolvable without it, `0` when it is unsolvable with it.
+  milliseconds; the same unit for both arms). With `r = baseline ÷ with`, the report's
+  `x = clamp(0.5 + ½·log₂ r, 0, 1)`: halving the cost per solve is full marks, no change is `0.5`,
+  doubling the cost is zero; `1` when the task is unsolvable without the subject, `0` when it is
+  unsolvable with it.
 
 ## Composite
 
@@ -86,12 +87,11 @@ Ten install reports (8 worked first time, 7 with verdict `keep`) and four weekly
 
 p = (0.4·0.80 + 0.3·0.786) / 0.7 = 0.794, n = 14 → lower 0.629 → **AI Rate 63**.
 
-Add one bench report (weight ω' = 0.3·⅓ = 0.1 until there are three). With a 3× cheaper task
-(x = 0.75): p = (0.4·0.80 + 0.3·0.786 + 0.1·0.75) / 0.8 = 0.788, n = 15 →
-**AI Rate 63**. With a 9× cheaper task (x = 0.9) → **65**. Had the bench found no
-difference (x = 0.5) → **59**. A measured uplift adds evidence and, when it is stronger than the
-field reports already say, lifts the index; a measured non-result lowers it; both start at a third of
-their eventual weight.
+Add one bench report (weight ω' = 0.3·⅓ = 0.1 until there are three). With a task that costs at least
+twice as much without the subject (x = 1): p = (0.4·0.80 + 0.3·0.786 + 0.1·1.0) / 0.8 = 0.820, n = 15 →
+**AI Rate 66**. Had the bench found no difference (x = 0.5) → **59**. A measured uplift adds
+evidence and lifts the index; a measured non-result lowers it; both start at a third of their eventual
+weight.
 
 ## Badge colours
 

@@ -51,8 +51,18 @@ def arm_summary(trials: list[dict], unit: str) -> dict:
     return {"trials": len(trials), "solve_rate": rate, "median_cost": median, "unit": unit, "cost_per_solve": cost_per_solve}
 
 
+def uplift_score(ratio: float) -> float:
+    """Map cost-per-solve ratio (baseline ÷ with) to x in [0, 1] on a log2 scale: halving the cost is full
+    marks, no change is 0.5, doubling the cost is zero."""
+    if ratio <= 0:
+        return 0.0
+    if math.isinf(ratio):
+        return 1.0
+    return min(1.0, max(0.0, NEUTRAL_UPLIFT + 0.5 * math.log2(ratio)))
+
+
 def bench_uplift(bench: dict) -> dict:
-    """Map a bench report to u in [0, 1]: 0.5 = no difference, 1 = the subject makes the task free, 0 = it makes it unsolvable."""
+    """Solve rate and cost per solved task of both arms, their ratio and the report's uplift score."""
     with_trials = bench["arms"]["with"]["trials"]
     base_trials = bench["arms"]["baseline"]["trials"]
     unit = pick_unit(with_trials, base_trials)
@@ -60,15 +70,14 @@ def bench_uplift(bench: dict) -> dict:
     b = arm_summary(base_trials, unit)
     cw, cb = w["cost_per_solve"], b["cost_per_solve"]
     if math.isinf(cw) and math.isinf(cb):
-        u, ratio = NEUTRAL_UPLIFT, 1.0
+        ratio = 1.0
     elif math.isinf(cw):
-        u, ratio = 0.0, 0.0
+        ratio = 0.0
     elif math.isinf(cb) or cw == 0:
-        u, ratio = (NEUTRAL_UPLIFT, 1.0) if cb == cw else (1.0, math.inf)
+        ratio = 1.0 if cb == cw else math.inf
     else:
         ratio = cb / cw
-        u = ratio / (1.0 + ratio)
-    return {"u": u, "ratio": ratio, "unit": unit, "with": w, "baseline": b}
+    return {"u": uplift_score(ratio), "ratio": ratio, "unit": unit, "with": w, "baseline": b}
 
 
 EVIDENCE_FOR_FULL_WEIGHT = 3.0
